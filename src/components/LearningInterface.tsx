@@ -1,8 +1,6 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { ArrowLeft, Check, X, RotateCcw } from 'lucide-react';
@@ -23,15 +21,22 @@ interface LearningInterfaceProps {
   onBack: () => void;
 }
 
+interface ChoiceOption {
+  id: string;
+  translation: string;
+  isCorrect: boolean;
+}
+
 const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningInterfaceProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [userAnswer, setUserAnswer] = useState('');
   const [showResult, setShowResult] = useState(false);
+  const [selectedChoice, setSelectedChoice] = useState<string | null>(null);
   const [isCorrect, setIsCorrect] = useState(false);
   const [completedWords, setCompletedWords] = useState<Set<string>>(new Set());
+  const [choices, setChoices] = useState<ChoiceOption[]>([]);
 
   const { data: words = [] } = useQuery({
     queryKey: ['vocabulary-words', vocabularyId],
@@ -117,19 +122,51 @@ const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningIn
   const currentWord = words[currentIndex];
   const progressPercentage = words.length > 0 ? (completedWords.size / words.length) * 100 : 0;
 
-  const handleSubmit = () => {
-    if (!currentWord) return;
+  // Generate multiple choice options when current word changes
+  useEffect(() => {
+    if (currentWord && words.length >= 4) {
+      generateChoices();
+    }
+  }, [currentWord, words]);
+
+  const generateChoices = () => {
+    if (!currentWord || words.length < 4) return;
+
+    // Get 3 random incorrect translations
+    const incorrectWords = words.filter(w => w.id !== currentWord.id);
+    const shuffledIncorrect = incorrectWords.sort(() => Math.random() - 0.5).slice(0, 3);
     
-    const correct = userAnswer.toLowerCase().trim() === currentWord.translation.toLowerCase().trim();
-    setIsCorrect(correct);
+    // Create choice options
+    const choiceOptions: ChoiceOption[] = [
+      { id: currentWord.id, translation: currentWord.translation, isCorrect: true },
+      ...shuffledIncorrect.map(word => ({ 
+        id: word.id, 
+        translation: word.translation, 
+        isCorrect: false 
+      }))
+    ];
+
+    // Randomize the position of all choices
+    const shuffledChoices = choiceOptions.sort(() => Math.random() - 0.5);
+    setChoices(shuffledChoices);
+  };
+
+  const handleChoiceSelect = (choiceId: string) => {
+    if (showResult) return;
+    
+    const selectedOption = choices.find(c => c.id === choiceId);
+    if (!selectedOption) return;
+
+    setSelectedChoice(choiceId);
+    setIsCorrect(selectedOption.isCorrect);
     setShowResult(true);
     
     updateProgressMutation.mutate({
       wordId: currentWord.id,
-      isCorrect: correct
+      isCorrect: selectedOption.isCorrect
     });
 
-    if (correct) {
+    if (selectedOption.isCorrect) {
       setCompletedWords(prev => new Set([...prev, currentWord.id]));
     }
   };
@@ -149,13 +186,14 @@ const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningIn
       setCurrentIndex(0);
     }
     
-    setUserAnswer('');
+    setSelectedChoice(null);
     setShowResult(false);
   };
 
   const handleRetry = () => {
-    setUserAnswer('');
+    setSelectedChoice(null);
     setShowResult(false);
+    generateChoices();
   };
 
   if (words.length === 0) {
@@ -170,8 +208,20 @@ const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningIn
     );
   }
 
+  if (words.length < 4) {
+    return (
+      <div className="text-center py-8">
+        <p className="text-gray-600">This vocabulary needs at least 4 words for the card game.</p>
+        <Button onClick={onBack} className="mt-4">
+          <ArrowLeft className="h-4 w-4 mr-2" />
+          Back to Vocabularies
+        </Button>
+      </div>
+    );
+  }
+
   return (
-    <div className="max-w-2xl mx-auto space-y-6">
+    <div className="max-w-4xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
         <Button variant="outline" onClick={onBack}>
           <ArrowLeft className="h-4 w-4 mr-2" />
@@ -195,29 +245,66 @@ const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningIn
             <h3 className="text-3xl font-bold text-indigo-600 mb-2">
               {currentWord?.word}
             </h3>
-            <p className="text-gray-600">Translate this word</p>
+            <p className="text-gray-600">Choose the correct translation</p>
           </div>
 
           {!showResult ? (
-            <div className="space-y-4">
-              <Input
-                value={userAnswer}
-                onChange={(e) => setUserAnswer(e.target.value)}
-                placeholder="Enter your translation..."
-                onKeyPress={(e) => e.key === 'Enter' && handleSubmit()}
-                className="text-center text-lg"
-              />
-              <Button 
-                onClick={handleSubmit} 
-                className="w-full"
-                disabled={!userAnswer.trim()}
-              >
-                Check Answer
-              </Button>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {choices.map((choice) => (
+                <Card 
+                  key={choice.id}
+                  className="cursor-pointer hover:shadow-lg transition-all border-2 hover:border-indigo-300"
+                  onClick={() => handleChoiceSelect(choice.id)}
+                >
+                  <CardContent className="p-6 text-center">
+                    <p className="text-lg font-medium">{choice.translation}</p>
+                  </CardContent>
+                </Card>
+              ))}
             </div>
           ) : (
-            <div className="space-y-4 text-center">
-              <div className={`p-4 rounded-lg ${isCorrect ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {choices.map((choice) => {
+                  const isSelected = selectedChoice === choice.id;
+                  const isCorrectChoice = choice.isCorrect;
+                  
+                  let cardStyle = "border-2 ";
+                  if (isSelected && isCorrectChoice) {
+                    cardStyle += "bg-green-50 border-green-500";
+                  } else if (isSelected && !isCorrectChoice) {
+                    cardStyle += "bg-red-50 border-red-500";
+                  } else if (isCorrectChoice) {
+                    cardStyle += "bg-green-50 border-green-500";
+                  } else {
+                    cardStyle += "border-gray-200";
+                  }
+
+                  return (
+                    <Card key={choice.id} className={cardStyle}>
+                      <CardContent className="p-6 text-center relative">
+                        <p className="text-lg font-medium">{choice.translation}</p>
+                        {isSelected && (
+                          <div className="absolute top-2 right-2">
+                            {isCorrectChoice ? (
+                              <Check className="h-5 w-5 text-green-600" />
+                            ) : (
+                              <X className="h-5 w-5 text-red-600" />
+                            )}
+                          </div>
+                        )}
+                        {!isSelected && isCorrectChoice && (
+                          <div className="absolute top-2 right-2">
+                            <Check className="h-5 w-5 text-green-600" />
+                          </div>
+                        )}
+                      </CardContent>
+                    </Card>
+                  );
+                })}
+              </div>
+              
+              <div className={`p-4 rounded-lg text-center ${isCorrect ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
                 <div className="flex items-center justify-center space-x-2 mb-2">
                   {isCorrect ? (
                     <Check className="h-6 w-6 text-green-600" />
@@ -231,11 +318,6 @@ const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningIn
                 <p className="text-gray-700">
                   <span className="font-medium">Correct answer:</span> {currentWord?.translation}
                 </p>
-                {!isCorrect && (
-                  <p className="text-gray-600 text-sm mt-1">
-                    <span className="font-medium">Your answer:</span> {userAnswer}
-                  </p>
-                )}
               </div>
               
               <div className="flex space-x-3">
