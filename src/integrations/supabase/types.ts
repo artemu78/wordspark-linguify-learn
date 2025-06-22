@@ -9,7 +9,172 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      profiles: {
+        Row: {
+          created_at: string | null
+          email: string
+          full_name: string | null
+          id: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          email: string
+          full_name?: string | null
+          id: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      user_progress: {
+        Row: {
+          attempts: number | null
+          id: string
+          is_correct: boolean | null
+          last_attempted: string | null
+          user_id: string
+          vocabulary_id: string
+          word_id: string
+        }
+        Insert: {
+          attempts?: number | null
+          id?: string
+          is_correct?: boolean | null
+          last_attempted?: string | null
+          user_id: string
+          vocabulary_id: string
+          word_id: string
+        }
+        Update: {
+          attempts?: number | null
+          id?: string
+          is_correct?: boolean | null
+          last_attempted?: string | null
+          user_id?: string
+          vocabulary_id?: string
+          word_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "user_progress_vocabulary_id_fkey"
+            columns: ["vocabulary_id"]
+            isOneToOne: false
+            referencedRelation: "vocabularies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "user_progress_word_id_fkey"
+            columns: ["word_id"]
+            isOneToOne: false
+            referencedRelation: "vocabulary_words"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vocabularies: {
+        Row: {
+          created_at: string | null
+          created_by: string | null
+          id: string
+          is_default: boolean | null
+          source_language: string
+          target_language: string
+          title: string
+          topic: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_default?: boolean | null
+          source_language?: string
+          target_language?: string
+          title: string
+          topic: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          created_by?: string | null
+          id?: string
+          is_default?: boolean | null
+          source_language?: string
+          target_language?: string
+          title?: string
+          topic?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
+      vocabulary_completion: {
+        Row: {
+          completed_at: string | null
+          id: string
+          user_id: string
+          vocabulary_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          id?: string
+          user_id: string
+          vocabulary_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          id?: string
+          user_id?: string
+          vocabulary_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vocabulary_completion_vocabulary_id_fkey"
+            columns: ["vocabulary_id"]
+            isOneToOne: false
+            referencedRelation: "vocabularies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      vocabulary_words: {
+        Row: {
+          created_at: string | null
+          id: string
+          translation: string
+          vocabulary_id: string
+          word: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          translation: string
+          vocabulary_id: string
+          word: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          translation?: string
+          vocabulary_id?: string
+          word?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vocabulary_words_vocabulary_id_fkey"
+            columns: ["vocabulary_id"]
+            isOneToOne: false
+            referencedRelation: "vocabularies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never
@@ -18,7 +183,7 @@ export type Database = {
       [_ in never]: never
     }
     Enums: {
-      [_ in never]: never
+      app_role: "user" | "admin"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -133,6 +298,8 @@ export type CompositeTypes<
 
 export const Constants = {
   public: {
-    Enums: {},
+    Enums: {
+      app_role: ["user", "admin"],
+    },
   },
 } as const
