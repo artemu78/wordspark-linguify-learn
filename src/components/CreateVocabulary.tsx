@@ -224,6 +224,7 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
                     <SelectItem value="fr">French</SelectItem>
                     <SelectItem value="de">German</SelectItem>
                     <SelectItem value="it">Italian</SelectItem>
+                    <SelectItem value="tr">Turkish</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -239,6 +240,7 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
                     <SelectItem value="fr">French</SelectItem>
                     <SelectItem value="de">German</SelectItem>
                     <SelectItem value="it">Italian</SelectItem>
+                    <SelectItem value="tr">Turkish</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
