@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Plus, Trash2 } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Sparkles } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -32,6 +32,37 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
   const [wordPairs, setWordPairs] = useState<WordPair[]>([
     { word: '', translation: '' }
   ]);
+  const [aiWordCount, setAiWordCount] = useState(10);
+
+  const generateVocabularyMutation = useMutation({
+    mutationFn: async () => {
+      const { data, error } = await supabase.functions.invoke('generate-vocabulary', {
+        body: {
+          topic,
+          sourceLanguage,
+          targetLanguage,
+          wordCount: aiWordCount
+        }
+      });
+
+      if (error) throw error;
+      return data.vocabularyWords;
+    },
+    onSuccess: (vocabularyWords) => {
+      setWordPairs(vocabularyWords);
+      toast({
+        title: "Success!",
+        description: `Generated ${vocabularyWords.length} vocabulary words.`
+      });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Error",
+        description: error.message,
+        variant: "destructive"
+      });
+    }
+  });
 
   const createVocabularyMutation = useMutation({
     mutationFn: async () => {
@@ -87,6 +118,18 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
       });
     }
   });
+
+  const handleGenerateWithAI = () => {
+    if (!topic.trim()) {
+      toast({
+        title: "Error",
+        description: "Please enter a topic before generating with AI.",
+        variant: "destructive"
+      });
+      return;
+    }
+    generateVocabularyMutation.mutate();
+  };
 
   const addWordPair = () => {
     setWordPairs([...wordPairs, { word: '', translation: '' }]);
@@ -204,10 +247,32 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
             <div className="space-y-4">
               <div className="flex justify-between items-center">
                 <Label>Word Pairs</Label>
-                <Button type="button" variant="outline" size="sm" onClick={addWordPair}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Add Word
-                </Button>
+                <div className="flex space-x-2">
+                  <div className="flex items-center space-x-2">
+                    <Input
+                      type="number"
+                      value={aiWordCount}
+                      onChange={(e) => setAiWordCount(Number(e.target.value))}
+                      min="5"
+                      max="20"
+                      className="w-16"
+                    />
+                    <Button 
+                      type="button" 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleGenerateWithAI}
+                      disabled={generateVocabularyMutation.isPending}
+                    >
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      {generateVocabularyMutation.isPending ? 'Generating...' : 'Generate with AI'}
+                    </Button>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={addWordPair}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Add Word
+                  </Button>
+                </div>
               </div>
               
               <div className="space-y-3">
