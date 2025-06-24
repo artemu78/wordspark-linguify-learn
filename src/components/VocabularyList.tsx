@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -118,31 +119,51 @@ const VocabularyList = ({ onSelectVocabulary, onCreateNew, onEditVocabulary }: V
 
   const deleteVocabularyMutation = useMutation({
     mutationFn: async (vocabularyId: string) => {
+      console.log('Deleting vocabulary:', vocabularyId);
+      
       // Delete user progress first
-      await supabase
+      const { error: progressError } = await supabase
         .from('user_progress')
         .delete()
         .eq('vocabulary_id', vocabularyId);
+      
+      if (progressError) {
+        console.error('Error deleting progress:', progressError);
+        throw progressError;
+      }
 
       // Delete vocabulary completion records
-      await supabase
+      const { error: completionError } = await supabase
         .from('vocabulary_completion')
         .delete()
         .eq('vocabulary_id', vocabularyId);
+      
+      if (completionError) {
+        console.error('Error deleting completion records:', completionError);
+        throw completionError;
+      }
 
       // Delete vocabulary words
-      await supabase
+      const { error: wordsError } = await supabase
         .from('vocabulary_words')
         .delete()
         .eq('vocabulary_id', vocabularyId);
+      
+      if (wordsError) {
+        console.error('Error deleting vocabulary words:', wordsError);
+        throw wordsError;
+      }
 
       // Finally delete the vocabulary
-      const { error } = await supabase
+      const { error: vocabError } = await supabase
         .from('vocabularies')
         .delete()
         .eq('id', vocabularyId);
 
-      if (error) throw error;
+      if (vocabError) {
+        console.error('Error deleting vocabulary:', vocabError);
+        throw vocabError;
+      }
     },
     onSuccess: () => {
       toast({
@@ -156,9 +177,10 @@ const VocabularyList = ({ onSelectVocabulary, onCreateNew, onEditVocabulary }: V
       setSelectedVocabulary(null);
     },
     onError: (error: any) => {
+      console.error('Delete vocabulary error:', error);
       toast({
         title: "Error",
-        description: error.message,
+        description: error.message || "Failed to delete vocabulary",
         variant: "destructive"
       });
     }
@@ -168,21 +190,31 @@ const VocabularyList = ({ onSelectVocabulary, onCreateNew, onEditVocabulary }: V
     mutationFn: async (vocabularyId: string) => {
       if (!user) throw new Error('User not authenticated');
 
+      console.log('Resetting progress for vocabulary:', vocabularyId, 'user:', user.id);
+
       // Delete user progress for this vocabulary
-      await supabase
+      const { error: progressError } = await supabase
         .from('user_progress')
         .delete()
         .eq('vocabulary_id', vocabularyId)
         .eq('user_id', user.id);
+      
+      if (progressError) {
+        console.error('Error deleting user progress:', progressError);
+        throw progressError;
+      }
 
       // Delete vocabulary completion record
-      const { error } = await supabase
+      const { error: completionError } = await supabase
         .from('vocabulary_completion')
         .delete()
         .eq('vocabulary_id', vocabularyId)
         .eq('user_id', user.id);
 
-      if (error) throw error;
+      if (completionError) {
+        console.error('Error deleting completion record:', completionError);
+        throw completionError;
+      }
     },
     onSuccess: () => {
       toast({
@@ -195,38 +227,44 @@ const VocabularyList = ({ onSelectVocabulary, onCreateNew, onEditVocabulary }: V
       setSelectedVocabulary(null);
     },
     onError: (error: any) => {
+      console.error('Reset progress error:', error);
       toast({
         title: "Error",
-        description: error.message,
+        description: error.message || "Failed to reset progress",
         variant: "destructive"
       });
     }
   });
 
   const handleEdit = (vocabulary: Vocabulary) => {
+    console.log('Edit vocabulary:', vocabulary);
     if (onEditVocabulary) {
       onEditVocabulary(vocabulary);
     }
   };
 
   const handleDelete = (vocabulary: Vocabulary) => {
+    console.log('Delete vocabulary requested:', vocabulary);
     setSelectedVocabulary(vocabulary);
     setDeleteDialogOpen(true);
   };
 
   const handleResetProgress = (vocabulary: Vocabulary) => {
+    console.log('Reset progress requested:', vocabulary);
     setSelectedVocabulary(vocabulary);
     setResetDialogOpen(true);
   };
 
   const confirmDelete = () => {
     if (selectedVocabulary) {
+      console.log('Confirming delete for:', selectedVocabulary);
       deleteVocabularyMutation.mutate(selectedVocabulary.id);
     }
   };
 
   const confirmResetProgress = () => {
     if (selectedVocabulary) {
+      console.log('Confirming reset progress for:', selectedVocabulary);
       resetProgressMutation.mutate(selectedVocabulary.id);
     }
   };
@@ -279,17 +317,23 @@ const VocabularyList = ({ onSelectVocabulary, onCreateNew, onEditVocabulary }: V
                           </Button>
                         </DropdownMenuTrigger>
                         <DropdownMenuContent align="end" className="bg-white">
-                          <DropdownMenuItem onClick={() => handleEdit(vocabulary)}>
+                          <DropdownMenuItem 
+                            onClick={() => handleEdit(vocabulary)}
+                            className="cursor-pointer"
+                          >
                             <Edit className="h-4 w-4 mr-2" />
                             Edit
                           </DropdownMenuItem>
-                          <DropdownMenuItem onClick={() => handleResetProgress(vocabulary)}>
+                          <DropdownMenuItem 
+                            onClick={() => handleResetProgress(vocabulary)}
+                            className="cursor-pointer"
+                          >
                             <RotateCcw className="h-4 w-4 mr-2" />
                             Reset progress
                           </DropdownMenuItem>
                           <DropdownMenuItem 
                             onClick={() => handleDelete(vocabulary)}
-                            className="text-red-600 focus:text-red-600"
+                            className="text-red-600 focus:text-red-600 cursor-pointer"
                           >
                             <Trash2 className="h-4 w-4 mr-2" />
                             Delete

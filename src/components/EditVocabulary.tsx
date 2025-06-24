@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -38,13 +37,18 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
   const { data: vocabulary, isLoading } = useQuery({
     queryKey: ['vocabulary', vocabularyId],
     queryFn: async () => {
+      console.log('Fetching vocabulary:', vocabularyId);
       const { data, error } = await supabase
         .from('vocabularies')
         .select('*')
         .eq('id', vocabularyId)
         .single();
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching vocabulary:', error);
+        throw error;
+      }
+      console.log('Vocabulary data:', data);
       return data;
     }
   });
@@ -53,12 +57,17 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
   const { data: words = [] } = useQuery({
     queryKey: ['vocabulary-words', vocabularyId],
     queryFn: async () => {
+      console.log('Fetching vocabulary words for:', vocabularyId);
       const { data, error } = await supabase
         .from('vocabulary_words')
         .select('*')
         .eq('vocabulary_id', vocabularyId);
       
-      if (error) throw error;
+      if (error) {
+        console.error('Error fetching vocabulary words:', error);
+        throw error;
+      }
+      console.log('Vocabulary words:', data);
       return data;
     }
   });
@@ -66,6 +75,7 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
   // Populate form when data is loaded
   useEffect(() => {
     if (vocabulary) {
+      console.log('Setting form data from vocabulary:', vocabulary);
       setTitle(vocabulary.title);
       setTopic(vocabulary.topic);
       setSourceLanguage(vocabulary.source_language);
@@ -75,6 +85,7 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
 
   useEffect(() => {
     if (words.length > 0) {
+      console.log('Setting word pairs from words:', words);
       setWordPairs(words.map(word => ({
         id: word.id,
         word: word.word,
@@ -87,6 +98,7 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
 
   const generateVocabularyMutation = useMutation({
     mutationFn: async () => {
+      console.log('Generating vocabulary with AI for topic:', topic);
       const { data, error } = await supabase.functions.invoke('generate-vocabulary', {
         body: {
           topic,
@@ -96,10 +108,15 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
         }
       });
 
-      if (error) throw error;
+      if (error) {
+        console.error('AI generation error:', error);
+        throw error;
+      }
+      console.log('AI generated vocabulary:', data);
       return data.vocabularyWords;
     },
     onSuccess: (vocabularyWords) => {
+      console.log('Setting AI generated words:', vocabularyWords);
       setWordPairs(vocabularyWords.map((word: any) => ({ word: word.word, translation: word.translation })));
       toast({
         title: "Success!",
@@ -107,9 +124,10 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
       });
     },
     onError: (error: any) => {
+      console.error('AI generation error:', error);
       toast({
         title: "Error",
-        description: error.message,
+        description: error.message || "Failed to generate vocabulary",
         variant: "destructive"
       });
     }
@@ -118,6 +136,10 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
   const updateVocabularyMutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error('User not authenticated');
+      
+      console.log('Updating vocabulary:', vocabularyId);
+      console.log('Update data:', { title, topic, sourceLanguage, targetLanguage });
+      console.log('Word pairs to save:', wordPairs);
       
       // Update vocabulary
       const { error: vocabError } = await supabase
@@ -129,15 +151,24 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
           target_language: targetLanguage,
           updated_at: new Date().toISOString()
         })
-        .eq('id', vocabularyId);
+        .eq('id', vocabularyId)
+        .eq('created_by', user.id); // Ensure user owns this vocabulary
       
-      if (vocabError) throw vocabError;
+      if (vocabError) {
+        console.error('Error updating vocabulary:', vocabError);
+        throw vocabError;
+      }
       
       // Delete existing words
-      await supabase
+      const { error: deleteError } = await supabase
         .from('vocabulary_words')
         .delete()
         .eq('vocabulary_id', vocabularyId);
+      
+      if (deleteError) {
+        console.error('Error deleting existing words:', deleteError);
+        throw deleteError;
+      }
       
       // Insert new word pairs
       const wordsToInsert = wordPairs
@@ -148,15 +179,21 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
           translation: pair.translation.trim()
         }));
       
+      console.log('Words to insert:', wordsToInsert);
+      
       if (wordsToInsert.length > 0) {
         const { error: wordsError } = await supabase
           .from('vocabulary_words')
           .insert(wordsToInsert);
         
-        if (wordsError) throw wordsError;
+        if (wordsError) {
+          console.error('Error inserting new words:', wordsError);
+          throw wordsError;
+        }
       }
     },
     onSuccess: () => {
+      console.log('Vocabulary updated successfully');
       toast({
         title: "Success!",
         description: "Vocabulary updated successfully."
@@ -167,9 +204,10 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
       onBack();
     },
     onError: (error: any) => {
+      console.error('Update vocabulary error:', error);
       toast({
         title: "Error",
-        description: error.message,
+        description: error.message || "Failed to update vocabulary",
         variant: "destructive"
       });
     }
@@ -205,6 +243,10 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
+    
+    console.log('Form submitted');
+    console.log('Form data:', { title, topic, sourceLanguage, targetLanguage });
+    console.log('Word pairs:', wordPairs);
     
     if (!title.trim() || !topic.trim()) {
       toast({
