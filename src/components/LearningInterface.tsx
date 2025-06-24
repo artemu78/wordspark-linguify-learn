@@ -1,9 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Check, X, RotateCcw } from 'lucide-react';
+import { ArrowLeft, Check, X, RotateCcw, Volume2 } from 'lucide-react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -13,6 +13,7 @@ interface VocabularyWord {
   id: string;
   word: string;
   translation: string;
+  audio_url?: string | null; // Added audio_url
 }
 
 interface LearningInterfaceProps {
@@ -37,8 +38,11 @@ const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningIn
   const [isCorrect, setIsCorrect] = useState(false);
   const [completedWords, setCompletedWords] = useState<Set<string>>(new Set());
   const [choices, setChoices] = useState<ChoiceOption[]>([]);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
 
-  const { data: words = [] } = useQuery({
+  const { data: words = [], refetch: refetchWords } = useQuery({
     queryKey: ['vocabulary-words', vocabularyId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -188,6 +192,7 @@ const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningIn
     
     setSelectedChoice(null);
     setShowResult(false);
+    setAudioUrl(null); // Reset audio URL on next word
   };
 
   const handleRetry = () => {
@@ -195,6 +200,74 @@ const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningIn
     setShowResult(false);
     generateChoices();
   };
+
+  const handleListen = async () => {
+    if (!currentWord || isAudioLoading) return;
+
+    setIsAudioLoading(true);
+    setAudioUrl(null); // Clear previous audio
+
+    try {
+      let urlToPlay = currentWord.audio_url;
+
+      if (!urlToPlay) {
+        // Get source language from vocabulary details (assuming it's available or can be fetched)
+        // For this example, I'll hardcode 'en-US'. You might need to fetch vocabulary details.
+        const { data: vocabularyData, error: vocabError } = await supabase
+          .from('vocabularies')
+          .select('source_language')
+          .eq('id', vocabularyId)
+          .single();
+
+        if (vocabError || !vocabularyData) {
+          throw new Error(vocabError?.message || 'Could not fetch vocabulary details for language code.');
+        }
+        const languageCode = vocabularyData.source_language;
+
+
+        const { data, error } = await supabase.functions.invoke("generate-audio", {
+          body: { word: currentWord.word, languageCode: languageCode },
+        });
+
+        if (error) throw error;
+        if (!data || !data.audioUrl) throw new Error("Audio URL not found in response");
+
+        urlToPlay = data.audioUrl;
+
+        // Update the vocabulary_words table with the new audio_url
+        const { error: updateError } = await supabase
+          .from('vocabulary_words')
+          .update({ audio_url: urlToPlay })
+          .eq('id', currentWord.id);
+
+        if (updateError) {
+          console.error("Error updating word with audio_url:", updateError);
+          // Potentially notify user, but proceed with playing audio if generated
+        } else {
+          // Refetch words to get the updated audio_url in the local cache
+          refetchWords();
+        }
+      }
+
+      setAudioUrl(urlToPlay);
+    } catch (err: any) {
+      console.error("Error generating or fetching audio:", err);
+      toast({
+        title: "Error",
+        description: err.message || "Failed to play audio.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAudioLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    if (audioUrl && audioRef.current) {
+      audioRef.current.play().catch(e => console.error("Error playing audio:", e));
+    }
+  }, [audioUrl]);
+
 
   if (words.length === 0) {
     return (
@@ -242,12 +315,23 @@ const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningIn
         </CardHeader>
         <CardContent className="space-y-6">
           <div className="text-center">
-            <h3 className="text-3xl font-bold text-indigo-600 mb-2">
-              {currentWord?.word}
-            </h3>
+            <div className="flex items-center justify-center space-x-2 mb-2">
+              <h3 className="text-3xl font-bold text-indigo-600">
+                {currentWord?.word}
+              </h3>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={handleListen}
+                disabled={isAudioLoading || !currentWord}
+                aria-label="Listen to word"
+              >
+                <Volume2 className={`h-6 w-6 ${isAudioLoading ? 'animate-pulse' : ''}`} />
+              </Button>
+            </div>
             <p className="text-gray-600">Choose the correct translation</p>
           </div>
-
+          {audioUrl && <audio ref={audioRef} src={audioUrl} className="hidden" />}
           {!showResult ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {choices.map((choice) => (
