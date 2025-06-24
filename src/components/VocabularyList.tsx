@@ -75,7 +75,7 @@ const VocabularyList = ({
           *,
           vocabulary_words(count)
         `);
-
+      console.log("Fetched data:", data);
       if (error) throw error;
 
       return data.map((vocab) => ({
@@ -84,6 +84,7 @@ const VocabularyList = ({
       }));
     },
   });
+  console.log("Fetched vocabularies:", vocabularies);
 
   const { data: userProgress = [] } = useQuery({
     queryKey: ["user-progress-all"],
