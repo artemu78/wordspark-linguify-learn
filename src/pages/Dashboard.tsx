@@ -5,8 +5,9 @@ import Header from '@/components/Header';
 import VocabularyList from '@/components/VocabularyList';
 import LearningInterface from '@/components/LearningInterface';
 import CreateVocabulary from '@/components/CreateVocabulary';
+import EditVocabulary from '@/components/EditVocabulary';
 
-type View = 'list' | 'learn' | 'create';
+type View = 'list' | 'learn' | 'create' | 'edit';
 
 interface SelectedVocabulary {
   id: string;
@@ -35,6 +36,11 @@ const Dashboard = () => {
     setCurrentView('create');
   };
 
+  const handleEditVocabulary = (vocabulary: any) => {
+    setSelectedVocabulary({ id: vocabulary.id, title: vocabulary.title });
+    setCurrentView('edit');
+  };
+
   const handleBackToList = () => {
     setCurrentView('list');
     setSelectedVocabulary(null);
@@ -49,6 +55,7 @@ const Dashboard = () => {
           <VocabularyList 
             onSelectVocabulary={handleSelectVocabulary}
             onCreateNew={handleCreateNew}
+            onEditVocabulary={handleEditVocabulary}
           />
         )}
         
@@ -62,6 +69,13 @@ const Dashboard = () => {
         
         {currentView === 'create' && (
           <CreateVocabulary onBack={handleBackToList} />
+        )}
+
+        {currentView === 'edit' && selectedVocabulary && (
+          <EditVocabulary 
+            vocabularyId={selectedVocabulary.id}
+            onBack={handleBackToList}
+          />
         )}
       </main>
     </div>
