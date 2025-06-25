@@ -263,7 +263,10 @@ const LearningInterface = ({
 
         console.log("Update response:", updateResponse);
         if (updateResponse.error) {
-          console.error("Error updating word with audio_url:", updateError);
+          console.error(
+            "Error updating word with audio_url:",
+            updateResponse.error
+          );
           // Potentially notify user, but proceed with playing audio if generated
         } else {
           // Refetch words to get the updated audio_url in the local cache
