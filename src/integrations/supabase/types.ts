@@ -150,6 +150,7 @@ export type Database = {
           translation: string
           vocabulary_id: string
           word: string
+          audio_url?: string | null
         }
         Insert: {
           created_at?: string | null
@@ -157,6 +158,7 @@ export type Database = {
           translation: string
           vocabulary_id: string
           word: string
+          audio_url?: string | null
         }
         Update: {
           created_at?: string | null
@@ -164,6 +166,7 @@ export type Database = {
           translation?: string
           vocabulary_id?: string
           word?: string
+          audio_url?: string | null
         }
         Relationships: [
           {
