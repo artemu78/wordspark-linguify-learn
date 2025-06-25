@@ -1,13 +1,13 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Progress } from '@/components/ui/progress';
-import { Badge } from '@/components/ui/badge';
-import { ArrowLeft, Check, X, RotateCcw, Volume2 } from 'lucide-react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { supabase } from '@/integrations/supabase/client';
-import { useAuth } from '@/contexts/AuthContext';
-import { useToast } from '@/hooks/use-toast';
+import React, { useState, useEffect, useRef } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Progress } from "@/components/ui/progress";
+import { Badge } from "@/components/ui/badge";
+import { ArrowLeft, Check, X, RotateCcw, Volume2 } from "lucide-react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { supabase } from "@/integrations/supabase/client";
+import { useAuth } from "@/contexts/AuthContext";
+import { useToast } from "@/hooks/use-toast";
 
 interface VocabularyWord {
   id: string;
@@ -28,7 +28,11 @@ interface ChoiceOption {
   isCorrect: boolean;
 }
 
-const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningInterfaceProps) => {
+const LearningInterface = ({
+  vocabularyId,
+  vocabularyTitle,
+  onBack,
+}: LearningInterfaceProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -43,88 +47,93 @@ const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningIn
   const audioRef = useRef<HTMLAudioElement>(null);
 
   const { data: words = [], refetch: refetchWords } = useQuery({
-    queryKey: ['vocabulary-words', vocabularyId],
+    queryKey: ["vocabulary-words", vocabularyId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('vocabulary_words')
-        .select('*')
-        .eq('vocabulary_id', vocabularyId);
-      
-      if (error) throw error;
-      return data;
-    }
-  });
+        .from("vocabulary_words")
+        .select("*")
+        .eq("vocabulary_id", vocabularyId);
 
-  const { data: progress = [] } = useQuery({
-    queryKey: ['user-progress', vocabularyId],
-    queryFn: async () => {
-      if (!user) return [];
-      
-      const { data, error } = await supabase
-        .from('user_progress')
-        .select('*')
-        .eq('user_id', user.id)
-        .eq('vocabulary_id', vocabularyId);
-      
       if (error) throw error;
       return data;
     },
-    enabled: !!user
+  });
+
+  const { data: progress = [] } = useQuery({
+    queryKey: ["user-progress", vocabularyId],
+    queryFn: async () => {
+      if (!user) return [];
+
+      const { data, error } = await supabase
+        .from("user_progress")
+        .select("*")
+        .eq("user_id", user.id)
+        .eq("vocabulary_id", vocabularyId);
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!user,
   });
 
   const updateProgressMutation = useMutation({
-    mutationFn: async ({ wordId, isCorrect }: { wordId: string; isCorrect: boolean }) => {
-      if (!user) throw new Error('User not authenticated');
-      
-      const existingProgress = progress.find(p => p.word_id === wordId);
-      
+    mutationFn: async ({
+      wordId,
+      isCorrect,
+    }: {
+      wordId: string;
+      isCorrect: boolean;
+    }) => {
+      if (!user) throw new Error("User not authenticated");
+
+      const existingProgress = progress.find((p) => p.word_id === wordId);
+
       if (existingProgress) {
         const { error } = await supabase
-          .from('user_progress')
+          .from("user_progress")
           .update({
             is_correct: isCorrect,
             attempts: existingProgress.attempts + 1,
-            last_attempted: new Date().toISOString()
+            last_attempted: new Date().toISOString(),
           })
-          .eq('id', existingProgress.id);
-        
+          .eq("id", existingProgress.id);
+
         if (error) throw error;
       } else {
-        const { error } = await supabase
-          .from('user_progress')
-          .insert({
-            user_id: user.id,
-            vocabulary_id: vocabularyId,
-            word_id: wordId,
-            is_correct: isCorrect,
-            attempts: 1
-          });
-        
+        const { error } = await supabase.from("user_progress").insert({
+          user_id: user.id,
+          vocabulary_id: vocabularyId,
+          word_id: wordId,
+          is_correct: isCorrect,
+          attempts: 1,
+        });
+
         if (error) throw error;
       }
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user-progress', vocabularyId] });
-    }
+      queryClient.invalidateQueries({
+        queryKey: ["user-progress", vocabularyId],
+      });
+    },
   });
 
   const checkCompletionMutation = useMutation({
     mutationFn: async () => {
-      if (!user) throw new Error('User not authenticated');
-      
-      const { error } = await supabase
-        .from('vocabulary_completion')
-        .upsert({
-          user_id: user.id,
-          vocabulary_id: vocabularyId
-        });
-      
+      if (!user) throw new Error("User not authenticated");
+
+      const { error } = await supabase.from("vocabulary_completion").upsert({
+        user_id: user.id,
+        vocabulary_id: vocabularyId,
+      });
+
       if (error) throw error;
-    }
+    },
   });
 
   const currentWord = words[currentIndex];
-  const progressPercentage = words.length > 0 ? (completedWords.size / words.length) * 100 : 0;
+  const progressPercentage =
+    words.length > 0 ? (completedWords.size / words.length) * 100 : 0;
 
   // Generate multiple choice options when current word changes
   useEffect(() => {
@@ -137,17 +146,23 @@ const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningIn
     if (!currentWord || words.length < 4) return;
 
     // Get 3 random incorrect translations
-    const incorrectWords = words.filter(w => w.id !== currentWord.id);
-    const shuffledIncorrect = incorrectWords.sort(() => Math.random() - 0.5).slice(0, 3);
-    
+    const incorrectWords = words.filter((w) => w.id !== currentWord.id);
+    const shuffledIncorrect = incorrectWords
+      .sort(() => Math.random() - 0.5)
+      .slice(0, 3);
+
     // Create choice options
     const choiceOptions: ChoiceOption[] = [
-      { id: currentWord.id, translation: currentWord.translation, isCorrect: true },
-      ...shuffledIncorrect.map(word => ({ 
-        id: word.id, 
-        translation: word.translation, 
-        isCorrect: false 
-      }))
+      {
+        id: currentWord.id,
+        translation: currentWord.translation,
+        isCorrect: true,
+      },
+      ...shuffledIncorrect.map((word) => ({
+        id: word.id,
+        translation: word.translation,
+        isCorrect: false,
+      })),
     ];
 
     // Randomize the position of all choices
@@ -157,21 +172,21 @@ const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningIn
 
   const handleChoiceSelect = (choiceId: string) => {
     if (showResult) return;
-    
-    const selectedOption = choices.find(c => c.id === choiceId);
+
+    const selectedOption = choices.find((c) => c.id === choiceId);
     if (!selectedOption) return;
 
     setSelectedChoice(choiceId);
     setIsCorrect(selectedOption.isCorrect);
     setShowResult(true);
-    
+
     updateProgressMutation.mutate({
       wordId: currentWord.id,
-      isCorrect: selectedOption.isCorrect
+      isCorrect: selectedOption.isCorrect,
     });
 
     if (selectedOption.isCorrect) {
-      setCompletedWords(prev => new Set([...prev, currentWord.id]));
+      setCompletedWords((prev) => new Set([...prev, currentWord.id]));
     }
   };
 
@@ -184,12 +199,12 @@ const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningIn
         checkCompletionMutation.mutate();
         toast({
           title: "Congratulations!",
-          description: "You've completed this vocabulary list!"
+          description: "You've completed this vocabulary list!",
         });
       }
       setCurrentIndex(0);
     }
-    
+
     setSelectedChoice(null);
     setShowResult(false);
     setAudioUrl(null); // Reset audio URL on next word
@@ -214,33 +229,40 @@ const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningIn
         // Get source language from vocabulary details (assuming it's available or can be fetched)
         // For this example, I'll hardcode 'en-US'. You might need to fetch vocabulary details.
         const { data: vocabularyData, error: vocabError } = await supabase
-          .from('vocabularies')
-          .select('source_language')
-          .eq('id', vocabularyId)
+          .from("vocabularies")
+          .select("source_language")
+          .eq("id", vocabularyId)
           .single();
 
         if (vocabError || !vocabularyData) {
-          throw new Error(vocabError?.message || 'Could not fetch vocabulary details for language code.');
+          throw new Error(
+            vocabError?.message ||
+              "Could not fetch vocabulary details for language code."
+          );
         }
         const languageCode = vocabularyData.source_language;
 
-
-        const { data, error } = await supabase.functions.invoke("generate-audio", {
-          body: { word: currentWord.word, languageCode: languageCode },
-        });
+        const { data, error } = await supabase.functions.invoke(
+          "generate-audio",
+          {
+            body: { word: currentWord.word, languageCode: languageCode },
+          }
+        );
 
         if (error) throw error;
-        if (!data || !data.audioUrl) throw new Error("Audio URL not found in response");
+        if (!data || !data.audioUrl)
+          throw new Error("Audio URL not found in response");
 
         urlToPlay = data.audioUrl;
 
         // Update the vocabulary_words table with the new audio_url
-        const { error: updateError } = await supabase
-          .from('vocabulary_words')
+        const updateResponse = await supabase
+          .from("vocabulary_words")
           .update({ audio_url: urlToPlay })
-          .eq('id', currentWord.id);
+          .eq("id", currentWord.id);
 
-        if (updateError) {
+        console.log("Update response:", updateResponse);
+        if (updateResponse.error) {
           console.error("Error updating word with audio_url:", updateError);
           // Potentially notify user, but proceed with playing audio if generated
         } else {
@@ -264,10 +286,11 @@ const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningIn
 
   useEffect(() => {
     if (audioUrl && audioRef.current) {
-      audioRef.current.play().catch(e => console.error("Error playing audio:", e));
+      audioRef.current
+        .play()
+        .catch((e) => console.error("Error playing audio:", e));
     }
   }, [audioUrl]);
-
 
   if (words.length === 0) {
     return (
@@ -284,7 +307,9 @@ const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningIn
   if (words.length < 4) {
     return (
       <div className="text-center py-8">
-        <p className="text-gray-600">This vocabulary needs at least 4 words for the card game.</p>
+        <p className="text-gray-600">
+          This vocabulary needs at least 4 words for the card game.
+        </p>
         <Button onClick={onBack} className="mt-4">
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back to Vocabularies
@@ -326,16 +351,20 @@ const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningIn
                 disabled={isAudioLoading || !currentWord}
                 aria-label="Listen to word"
               >
-                <Volume2 className={`h-6 w-6 ${isAudioLoading ? 'animate-pulse' : ''}`} />
+                <Volume2
+                  className={`h-6 w-6 ${isAudioLoading ? "animate-pulse" : ""}`}
+                />
               </Button>
             </div>
             <p className="text-gray-600">Choose the correct translation</p>
           </div>
-          {audioUrl && <audio ref={audioRef} src={audioUrl} className="hidden" />}
+          {audioUrl && (
+            <audio ref={audioRef} src={audioUrl} className="hidden" />
+          )}
           {!showResult ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {choices.map((choice) => (
-                <Card 
+                <Card
                   key={choice.id}
                   className="cursor-pointer hover:shadow-lg transition-all border-2 hover:border-indigo-300"
                   onClick={() => handleChoiceSelect(choice.id)}
@@ -352,7 +381,7 @@ const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningIn
                 {choices.map((choice) => {
                   const isSelected = selectedChoice === choice.id;
                   const isCorrectChoice = choice.isCorrect;
-                  
+
                   let cardStyle = "border-2 ";
                   if (isSelected && isCorrectChoice) {
                     cardStyle += "bg-green-50 border-green-500";
@@ -367,7 +396,9 @@ const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningIn
                   return (
                     <Card key={choice.id} className={cardStyle}>
                       <CardContent className="p-6 text-center relative">
-                        <p className="text-lg font-medium">{choice.translation}</p>
+                        <p className="text-lg font-medium">
+                          {choice.translation}
+                        </p>
                         {isSelected && (
                           <div className="absolute top-2 right-2">
                             {isCorrectChoice ? (
@@ -387,32 +418,47 @@ const LearningInterface = ({ vocabularyId, vocabularyTitle, onBack }: LearningIn
                   );
                 })}
               </div>
-              
-              <div className={`p-4 rounded-lg text-center ${isCorrect ? 'bg-green-50 border border-green-200' : 'bg-red-50 border border-red-200'}`}>
+
+              <div
+                className={`p-4 rounded-lg text-center ${
+                  isCorrect
+                    ? "bg-green-50 border border-green-200"
+                    : "bg-red-50 border border-red-200"
+                }`}
+              >
                 <div className="flex items-center justify-center space-x-2 mb-2">
                   {isCorrect ? (
                     <Check className="h-6 w-6 text-green-600" />
                   ) : (
                     <X className="h-6 w-6 text-red-600" />
                   )}
-                  <span className={`font-semibold ${isCorrect ? 'text-green-800' : 'text-red-800'}`}>
-                    {isCorrect ? 'Correct!' : 'Incorrect'}
+                  <span
+                    className={`font-semibold ${
+                      isCorrect ? "text-green-800" : "text-red-800"
+                    }`}
+                  >
+                    {isCorrect ? "Correct!" : "Incorrect"}
                   </span>
                 </div>
                 <p className="text-gray-700">
-                  <span className="font-medium">Correct answer:</span> {currentWord?.translation}
+                  <span className="font-medium">Correct answer:</span>{" "}
+                  {currentWord?.translation}
                 </p>
               </div>
-              
+
               <div className="flex space-x-3">
                 {!isCorrect && (
-                  <Button variant="outline" onClick={handleRetry} className="flex-1">
+                  <Button
+                    variant="outline"
+                    onClick={handleRetry}
+                    className="flex-1"
+                  >
                     <RotateCcw className="h-4 w-4 mr-2" />
                     Try Again
                   </Button>
                 )}
                 <Button onClick={handleNext} className="flex-1">
-                  {currentIndex < words.length - 1 ? 'Next Word' : 'Restart'}
+                  {currentIndex < words.length - 1 ? "Next Word" : "Restart"}
                 </Button>
               </div>
             </div>
