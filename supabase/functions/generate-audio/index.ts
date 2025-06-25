@@ -9,6 +9,23 @@ const corsHeaders = {
 const SUPABASE_BUCKET_NAME = "wordspark-files";
 const ELEVENLABS_VOICE_ID = "9BWtsMINqrJLrRacOk9x";
 const ELEVENLABS_MODEL_ID = "eleven_multilingual_v2";
+function transliterate(str) {
+  const normalizedNFD = str
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "") // Remove diacritical marks
+    .replace(/ç/g, "c")
+    .replace(/ş/g, "s")
+    .replace(/ı/g, "i")
+    .replace(/ğ/g, "g")
+    .replace(/ö/g, "o")
+    .replace(/ü/g, "u");
+  const normalizedNFC = normalizedNFD.normalize("NFC");
+  const normalizedNFKD = normalizedNFD.normalize("NFKD");
+  const normalizedNFKC = normalizedNFD.normalize("NFKC");
+  // Ensure the string contains only Latin letters and numbers
+  const latinOnly = normalizedNFKC.replace(/[^a-zA-Z0-9]/g, "");
+  return latinOnly;
+}
 // Helper function to handle Supabase storage upload and get public URL
 async function uploadToStorage(filePath, data, contentType) {
   const supabaseClient = createClient(
@@ -72,7 +89,6 @@ serve(async (req) => {
       // throw new Error(`ElevenLabs API TTS error: ${status} - ${message}`);
       throw new Error(`ElevenLabs API TTS error`);
     }
-
     let audioContent;
     try {
       // Read the audio content as a Uint8Array from the response body
@@ -82,7 +98,9 @@ serve(async (req) => {
       console.error("Failed to read audio content from response");
       throw new Error("Failed to read audio data");
     }
-    const audioFileName = `${languageCode}_${word.replace(/\s+/g, "_")}.mp3`;
+    const audioFileName = transliterate(
+      `${languageCode}_${word.replace(/\s+/g, "_")}.mp3`
+    );
     let audioUrl;
     try {
       audioUrl = await uploadToStorage(
@@ -91,7 +109,7 @@ serve(async (req) => {
         "audio/mpeg"
       );
     } catch (e) {
-      throw new Error("error in uploadToStorage");
+      throw new Error("error in uploadToStorage" + e.message.toString());
     }
     let functionResponse;
     try {
@@ -126,18 +144,3 @@ serve(async (req) => {
     );
   }
 });
-async function SaveRowJson(responseData, languageCode, word) {
-  const responseDataString = JSON.stringify(responseData, null, 2);
-  const encoder = new TextEncoder();
-  const jsonData = encoder.encode(responseDataString);
-  const jsonFileName = `${languageCode}_${word.replace(
-    /\s+/g,
-    "_"
-  )}_response.json`;
-  const responseDataUrl = await uploadToStorage(
-    jsonFileName,
-    jsonData,
-    "application/json"
-  );
-  return responseDataUrl;
-}

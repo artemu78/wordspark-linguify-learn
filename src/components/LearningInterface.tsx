@@ -45,7 +45,6 @@ const LearningInterface = ({
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
-
   const { data: words = [], refetch: refetchWords } = useQuery({
     queryKey: ["vocabulary-words", vocabularyId],
     queryFn: async () => {
@@ -221,10 +220,8 @@ const LearningInterface = ({
 
     setIsAudioLoading(true);
     setAudioUrl(null); // Clear previous audio
-
+    let urlToPlay = currentWord.audio_url;
     try {
-      let urlToPlay = currentWord.audio_url;
-
       if (!urlToPlay) {
         // Get source language from vocabulary details (assuming it's available or can be fetched)
         // For this example, I'll hardcode 'en-US'. You might need to fetch vocabulary details.
@@ -261,7 +258,6 @@ const LearningInterface = ({
           .update({ audio_url: urlToPlay })
           .eq("id", currentWord.id);
 
-        console.log("Update response:", updateResponse);
         if (updateResponse.error) {
           console.error(
             "Error updating word with audio_url:",
@@ -284,16 +280,11 @@ const LearningInterface = ({
       });
     } finally {
       setIsAudioLoading(false);
+      audioRef.current.src = audioUrl;
+      await audioRef.current.load(); // Preload the audio file
+      playWordAudio(urlToPlay, audioRef);
     }
   };
-
-  useEffect(() => {
-    if (audioUrl && audioRef.current) {
-      audioRef.current
-        .play()
-        .catch((e) => console.error("Error playing audio:", e));
-    }
-  }, [audioUrl]);
 
   if (words.length === 0) {
     return (
@@ -355,15 +346,13 @@ const LearningInterface = ({
                 aria-label="Listen to word"
               >
                 <Volume2
-                  className={`h-6 w-6 ${isAudioLoading ? "animate-pulse" : ""}`}
+                  className={`h-6 w-6 ${isAudioLoading ? "animate-spin" : ""}`}
                 />
               </Button>
             </div>
             <p className="text-gray-600">Choose the correct translation</p>
           </div>
-          {audioUrl && (
-            <audio ref={audioRef} src={audioUrl} className="hidden" />
-          )}
+          <audio ref={audioRef} src={audioUrl} className="hidden" />
           {!showResult ? (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {choices.map((choice) => (
@@ -473,3 +462,16 @@ const LearningInterface = ({
 };
 
 export default LearningInterface;
+async function playWordAudio(
+  audioUrl: string,
+  audioRef: React.MutableRefObject<HTMLAudioElement>
+) {
+  if (audioUrl && audioRef.current) {
+    // Ensure the audio is loaded before attempting to play
+    audioRef.current.src = audioUrl;
+    await audioRef.current.load(); // Preload the audio file
+    audioRef.current
+      .play()
+      .catch((e) => console.error("Error playing audio:", e));
+  }
+}
