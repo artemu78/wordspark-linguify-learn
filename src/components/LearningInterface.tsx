@@ -470,8 +470,16 @@ async function playWordAudio(
     // Ensure the audio is loaded before attempting to play
     audioRef.current.src = audioUrl;
     await audioRef.current.load(); // Preload the audio file
-    audioRef.current
-      .play()
-      .catch((e) => console.error("Error playing audio:", e));
+    audioRef.current.play().catch((e) => {
+      console.error("Error playing audio:", e);
+      // Retry playing after 1 second
+      setTimeout(() => {
+        audioRef.current
+          ?.play()
+          .catch((retryError) =>
+            console.error("Retry failed to play audio:", retryError)
+          );
+      }, 1000);
+    });
   }
 }
