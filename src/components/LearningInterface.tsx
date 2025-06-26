@@ -169,29 +169,59 @@ const LearningInterface = ({
   useEffect(() => {
     if (currentWord) {
       const wordProgress = progress.find((p) => p.word_id === currentWord.id);
-      const choiceDone = wordProgress?.choice_correct;
-      const typingDone = wordProgress?.typing_correct;
+      // Removed duplicate: const wordProgress = progress.find((p) => p.word_id === currentWord.id);
+      const choiceDone = !!wordProgress?.choice_correct; // Ensure boolean
+      const typingDone = !!wordProgress?.typing_correct; // Ensure boolean
+
+      let newType: "choice" | "typing";
+      // Store previous challenge type to detect if it changes
+      const previousChallengeType = challengeTypeRef.current;
 
       if (!choiceDone) {
-        setChallengeType("choice");
-        if (words.length >= 4) generateChoices();
-        setDisplayWord(""); // Clear display word for choice
+        newType = "choice";
+        // Only generate choices if the type is actually changing to 'choice' or word changed
+        if (challengeType !== "choice" || currentWord.id !== previousDisplayWordForRef.current) {
+            if (words.length >= 4) generateChoices();
+            setDisplayWord("");
+        }
       } else if (!typingDone) {
-        setChallengeType("typing");
-        setDisplayWord(generateDisplayWord(currentWord.translation));
-        setChoices([]); // Clear choices for typing
+        newType = "typing";
+         // Only update display word if the type is actually changing to 'typing' or word changed
+        if (challengeType !== "typing" || currentWord.id !== previousDisplayWordForRef.current) {
+            setDisplayWord(generateDisplayWord(currentWord.translation));
+            setChoices([]);
+        }
       } else {
-        // Both done, this word should ideally be skipped or handled
-        // For now, let's default to choice if somehow reached here (e.g. after completing all)
-        // This case will be refined in handleNext
-        setChallengeType("choice");
-        if (words.length >= 4) generateChoices();
+        // Word is fully done. handleNext will move. If we are here, it's likely after completion & restart.
+        newType = "choice";
+        if (challengeType !== "choice" || currentWord.id !== previousDisplayWordForRef.current) {
+            if (words.length >= 4) generateChoices();
+             setDisplayWord("");
+        }
       }
-      setTypedAnswer(""); // Reset typed answer
-      setShowResult(false); // Reset result view
-      setSelectedChoice(null); // Reset selected choice
+
+      if (previousChallengeType !== newType || currentWord.id !== previousDisplayWordForRef.current) {
+        setChallengeType(newType); // Set the new type
+        setShowResult(false);
+        setTypedAnswer("");
+        setSelectedChoice(null);
+      }
+
+      // Update refs for the next run
+      challengeTypeRef.current = newType; // newType is the type determined for current state
+      previousDisplayWordForRef.current = currentWord.id;
     }
-  }, [currentWord, words, progress]); // Added progress as dependency
+  }, [currentWord, words, progress]); // challengeType removed from deps, using ref instead
+
+  // Refs to track previous values for useEffect logic
+  const challengeTypeRef = useRef(challengeType);
+  const previousDisplayWordForRef = useRef<string | undefined>();
+
+  // Update ref when challengeType state changes from outside the effect (e.g. initial state)
+  useEffect(() => {
+    challengeTypeRef.current = challengeType;
+  }, [challengeType]);
+
 
   const generateChoices = () => {
     if (!currentWord || words.length < 4) return;
@@ -274,49 +304,47 @@ const LearningInterface = ({
   };
 
   const handleNext = () => {
-    // Logic to find the next incomplete word/challenge
-    let nextWordIndex = -1;
-    let foundNext = false;
-
-    // Start searching from the current index
-    for (let i = 0; i < words.length; i++) {
-      const wordIdx = (currentIndex + i) % words.length;
-      const word = words[wordIdx];
-      const wordProgress = progress.find((p) => p.word_id === word.id);
-      if (!wordProgress || !wordProgress.choice_correct || !wordProgress.typing_correct) {
-         // If we are past the current word in the loop or it's the first check
-        if (i > 0 || (i === 0 && (wordProgress?.is_correct === false || !wordProgress))) {
-          nextWordIndex = wordIdx;
-          foundNext = true;
-          break;
-        }
-      }
-    }
-
-    if (foundNext) {
-      setCurrentIndex(nextWordIndex);
-    } else {
-      // All words and their challenges are completed
-      const allFullyCompleted = words.every(word => {
-        const p = progress.find(pr => pr.word_id === word.id);
-        return p && p.is_correct;
-      });
-
-      if (allFullyCompleted && words.length > 0) {
-         checkCompletionMutation.mutate();
-         toast({
-           title: "Congratulations!",
-           description: "You've completed this vocabulary list!",
-         });
-      }
-      // Restart or show completion message - for now, restart from beginning
-      setCurrentIndex(0);
-    }
-
-    // Reset states for the new word/challenge
-    setSelectedChoice(null);
+    // Reset UI states for the next word/challenge presentation
     setShowResult(false);
+    setSelectedChoice(null);
+    setTypedAnswer("");
     setAudioUrl(null); // Reset audio URL on next word
+    setIsCorrect(false); // Reset correctness state
+
+    if (words.length === 0) {
+      setCurrentIndex(0); // Should not happen if component guards against empty words
+      return;
+    }
+
+    // Try to find the next word that is not fully completed (is_correct is false)
+    // Start searching from the word *after* the current one.
+    for (let i = 1; i <= words.length; i++) { // Iterate through all words once, starting from next
+      const nextPotentialWordIndex = (currentIndex + i) % words.length;
+      const word = words[nextPotentialWordIndex];
+      const wordProgress = progress.find((p) => p.word_id === word.id);
+
+      if (!wordProgress || !wordProgress.is_correct) {
+        setCurrentIndex(nextPotentialWordIndex);
+        return; // Found the next word to work on
+      }
+    }
+
+    // If the loop completes, it means all words are is_correct: true
+    // Or there's only one word and it's now complete.
+    // Check for overall completion.
+    const allFullyCompleted = words.every(word => {
+      const p = progress.find(pr => pr.word_id === word.id);
+      return p && p.is_correct;
+    });
+
+    if (allFullyCompleted && words.length > 0) {
+      checkCompletionMutation.mutate();
+      toast({
+        title: "Congratulations!",
+        description: "You've completed this vocabulary list!",
+      });
+    }
+    setCurrentIndex(0); // Restart the vocabulary
   };
 
   const handleRetry = () => {

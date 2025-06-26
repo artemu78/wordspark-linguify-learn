@@ -238,7 +238,8 @@ describe("LearningInterface", () => {
     await waitFor(() => expect(screen.getByText("1 of 4 words completed")).toBeInTheDocument());
 
     // Click "Next Word" - this should trigger setCurrentIndex and then useEffect
-    fireEvent.click(screen.getByText("Next Word"));
+    const nextButton = await screen.findByText("Next Word");
+    fireEvent.click(nextButton);
 
     // After clicking Next, the component should update to Banana
     // The useEffect will use the progressAfterTypingCorrectly (where Banana has no progress)
