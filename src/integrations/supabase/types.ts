@@ -38,6 +38,8 @@ export type Database = {
           attempts: number | null
           id: string
           is_correct: boolean | null
+          choice_correct: boolean | null // Added
+          typing_correct: boolean | null // Added
           last_attempted: string | null
           user_id: string
           vocabulary_id: string
@@ -47,6 +49,8 @@ export type Database = {
           attempts?: number | null
           id?: string
           is_correct?: boolean | null
+          choice_correct?: boolean | null // Added
+          typing_correct?: boolean | null // Added
           last_attempted?: string | null
           user_id: string
           vocabulary_id: string
@@ -56,6 +60,8 @@ export type Database = {
           attempts?: number | null
           id?: string
           is_correct?: boolean | null
+          choice_correct?: boolean | null // Added
+          typing_correct?: boolean | null // Added
           last_attempted?: string | null
           user_id?: string
           vocabulary_id?: string

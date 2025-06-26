@@ -40,11 +40,18 @@ const LearningInterface = ({
   const [showResult, setShowResult] = useState(false);
   const [selectedChoice, setSelectedChoice] = useState<string | null>(null);
   const [isCorrect, setIsCorrect] = useState(false);
-  const [completedWords, setCompletedWords] = useState<Set<string>>(new Set());
+  // const [completedWords, setCompletedWords] = useState<Set<string>>(new Set()); // Will be derived from progress
   const [choices, setChoices] = useState<ChoiceOption[]>([]);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+
+  // New state for typing challenge
+  const [challengeType, setChallengeType] = useState<"choice" | "typing">(
+    "choice"
+  );
+  const [typedAnswer, setTypedAnswer] = useState("");
+  const [displayWord, setDisplayWord] = useState(""); // For partially hidden word
   const { data: words = [], refetch: refetchWords } = useQuery({
     queryKey: ["vocabulary-words", vocabularyId],
     queryFn: async () => {
@@ -59,7 +66,7 @@ const LearningInterface = ({
   });
 
   const { data: progress = [] } = useQuery({
-    queryKey: ["user-progress", vocabularyId],
+    queryKey: ["user-progress", vocabularyId, user?.id],
     queryFn: async () => {
       if (!user) return [];
 
@@ -78,42 +85,64 @@ const LearningInterface = ({
   const updateProgressMutation = useMutation({
     mutationFn: async ({
       wordId,
-      isCorrect,
+      challengeType,
+      isCorrectAttempt,
     }: {
       wordId: string;
-      isCorrect: boolean;
+      challengeType: "choice" | "typing";
+      isCorrectAttempt: boolean;
     }) => {
       if (!user) throw new Error("User not authenticated");
 
       const existingProgress = progress.find((p) => p.word_id === wordId);
+      let newProgressData: any = {
+        attempts: (existingProgress?.attempts || 0) + 1,
+        last_attempted: new Date().toISOString(),
+      };
+
+      if (challengeType === "choice") {
+        newProgressData.choice_correct = isCorrectAttempt;
+      } else {
+        newProgressData.typing_correct = isCorrectAttempt;
+      }
+
+      // Determine overall is_correct
+      const currentChoiceCorrect =
+        challengeType === "choice"
+          ? isCorrectAttempt
+          : existingProgress?.choice_correct;
+      const currentTypingCorrect =
+        challengeType === "typing"
+          ? isCorrectAttempt
+          : existingProgress?.typing_correct;
+
+      newProgressData.is_correct = !!(currentChoiceCorrect && currentTypingCorrect);
 
       if (existingProgress) {
         const { error } = await supabase
           .from("user_progress")
-          .update({
-            is_correct: isCorrect,
-            attempts: existingProgress.attempts + 1,
-            last_attempted: new Date().toISOString(),
-          })
+          .update(newProgressData)
           .eq("id", existingProgress.id);
-
         if (error) throw error;
       } else {
         const { error } = await supabase.from("user_progress").insert({
           user_id: user.id,
           vocabulary_id: vocabularyId,
           word_id: wordId,
-          is_correct: isCorrect,
-          attempts: 1,
+          ...newProgressData,
+          // Ensure initial values for the other challenge type if not set
+          choice_correct: newProgressData.choice_correct !== undefined ? newProgressData.choice_correct : false,
+          typing_correct: newProgressData.typing_correct !== undefined ? newProgressData.typing_correct : false,
+          is_correct: newProgressData.is_correct, // Already calculated
         });
-
         if (error) throw error;
       }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({
-        queryKey: ["user-progress", vocabularyId],
+        queryKey: ["user-progress", vocabularyId, user?.id],
       });
+      // Potentially refetch words if progress affects word list directly
     },
   });
 
@@ -131,15 +160,38 @@ const LearningInterface = ({
   });
 
   const currentWord = words[currentIndex];
-  const progressPercentage =
-    words.length > 0 ? (completedWords.size / words.length) * 100 : 0;
 
-  // Generate multiple choice options when current word changes
+  const fullyCompletedCount = progress.filter(p => p.is_correct).length;
+  const progressPercentage = words.length > 0 ? (fullyCompletedCount / words.length) * 100 : 0;
+
+
+  // Logic to decide challenge type and prepare for it
   useEffect(() => {
-    if (currentWord && words.length >= 4) {
-      generateChoices();
+    if (currentWord) {
+      const wordProgress = progress.find((p) => p.word_id === currentWord.id);
+      const choiceDone = wordProgress?.choice_correct;
+      const typingDone = wordProgress?.typing_correct;
+
+      if (!choiceDone) {
+        setChallengeType("choice");
+        if (words.length >= 4) generateChoices();
+        setDisplayWord(""); // Clear display word for choice
+      } else if (!typingDone) {
+        setChallengeType("typing");
+        setDisplayWord(generateDisplayWord(currentWord.translation));
+        setChoices([]); // Clear choices for typing
+      } else {
+        // Both done, this word should ideally be skipped or handled
+        // For now, let's default to choice if somehow reached here (e.g. after completing all)
+        // This case will be refined in handleNext
+        setChallengeType("choice");
+        if (words.length >= 4) generateChoices();
+      }
+      setTypedAnswer(""); // Reset typed answer
+      setShowResult(false); // Reset result view
+      setSelectedChoice(null); // Reset selected choice
     }
-  }, [currentWord, words]);
+  }, [currentWord, words, progress]); // Added progress as dependency
 
   const generateChoices = () => {
     if (!currentWord || words.length < 4) return;
@@ -169,6 +221,20 @@ const LearningInterface = ({
     setChoices(shuffledChoices);
   };
 
+  // Function to generate partially hidden word
+  const generateDisplayWord = (word: string) => {
+    const length = word.length;
+    const halfLength = Math.ceil(length / 2);
+    let indicesToHide = new Set<number>();
+    while (indicesToHide.size < halfLength) {
+      indicesToHide.add(Math.floor(Math.random() * length));
+    }
+    return word
+      .split("")
+      .map((char, i) => (indicesToHide.has(i) ? "*" : char))
+      .join("");
+  };
+
   const handleChoiceSelect = (choiceId: string) => {
     if (showResult) return;
 
@@ -176,34 +242,78 @@ const LearningInterface = ({
     if (!selectedOption) return;
 
     setSelectedChoice(choiceId);
-    setIsCorrect(selectedOption.isCorrect);
+    const correct = selectedOption.isCorrect;
+    setIsCorrect(correct);
     setShowResult(true);
 
     updateProgressMutation.mutate({
       wordId: currentWord.id,
-      isCorrect: selectedOption.isCorrect,
+      challengeType: "choice",
+      isCorrectAttempt: correct,
     });
 
-    if (selectedOption.isCorrect) {
-      setCompletedWords((prev) => new Set([...prev, currentWord.id]));
-    }
+    // Note: completedWords logic will need to change.
+    // A word is completed if BOTH choice and typing are correct.
+    // This will be handled by checking progress data.
+  };
+
+  const handleTypingSubmit = () => {
+    if (showResult || !currentWord) return;
+
+    const isAttemptCorrect =
+      typedAnswer.trim().toLowerCase() ===
+      currentWord.translation.toLowerCase();
+    setIsCorrect(isAttemptCorrect);
+    setShowResult(true);
+
+    updateProgressMutation.mutate({
+      wordId: currentWord.id,
+      challengeType: "typing",
+      isCorrectAttempt: isAttemptCorrect,
+    });
   };
 
   const handleNext = () => {
-    if (currentIndex < words.length - 1) {
-      setCurrentIndex(currentIndex + 1);
-    } else {
-      // Check if vocabulary is completed
-      if (completedWords.size === words.length) {
-        checkCompletionMutation.mutate();
-        toast({
-          title: "Congratulations!",
-          description: "You've completed this vocabulary list!",
-        });
+    // Logic to find the next incomplete word/challenge
+    let nextWordIndex = -1;
+    let foundNext = false;
+
+    // Start searching from the current index
+    for (let i = 0; i < words.length; i++) {
+      const wordIdx = (currentIndex + i) % words.length;
+      const word = words[wordIdx];
+      const wordProgress = progress.find((p) => p.word_id === word.id);
+      if (!wordProgress || !wordProgress.choice_correct || !wordProgress.typing_correct) {
+         // If we are past the current word in the loop or it's the first check
+        if (i > 0 || (i === 0 && (wordProgress?.is_correct === false || !wordProgress))) {
+          nextWordIndex = wordIdx;
+          foundNext = true;
+          break;
+        }
       }
+    }
+
+    if (foundNext) {
+      setCurrentIndex(nextWordIndex);
+    } else {
+      // All words and their challenges are completed
+      const allFullyCompleted = words.every(word => {
+        const p = progress.find(pr => pr.word_id === word.id);
+        return p && p.is_correct;
+      });
+
+      if (allFullyCompleted && words.length > 0) {
+         checkCompletionMutation.mutate();
+         toast({
+           title: "Congratulations!",
+           description: "You've completed this vocabulary list!",
+         });
+      }
+      // Restart or show completion message - for now, restart from beginning
       setCurrentIndex(0);
     }
 
+    // Reset states for the new word/challenge
     setSelectedChoice(null);
     setShowResult(false);
     setAudioUrl(null); // Reset audio URL on next word
@@ -212,7 +322,13 @@ const LearningInterface = ({
   const handleRetry = () => {
     setSelectedChoice(null);
     setShowResult(false);
-    generateChoices();
+    setTypedAnswer(""); // Clear typed answer on retry
+    if (challengeType === "choice" && words.length >=4) {
+      generateChoices();
+    } else if (challengeType === "typing" && currentWord) {
+      // Optionally regenerate display word if it should change on retry, or keep it same
+      // setDisplayWord(generateDisplayWord(currentWord.translation));
+    }
   };
 
   const handleListen = async () => {
@@ -329,7 +445,7 @@ const LearningInterface = ({
           <CardTitle className="text-center">{vocabularyTitle}</CardTitle>
           <Progress value={progressPercentage} className="w-full" />
           <p className="text-sm text-center text-gray-600">
-            {completedWords.size} of {words.length} words completed
+            {fullyCompletedCount} of {words.length} words completed
           </p>
         </CardHeader>
         <CardContent className="space-y-6">
@@ -350,67 +466,96 @@ const LearningInterface = ({
                 />
               </Button>
             </div>
-            <p className="text-gray-600">Choose the correct translation</p>
+            <p className="text-gray-600">
+              {challengeType === "choice"
+                ? "Choose the correct translation"
+                : "Type the translation (half hidden below)"}
+            </p>
+            {challengeType === "typing" && !showResult && (
+              <p className="text-2xl font-semibold text-center text-blue-600 tracking-wider">
+                {displayWord}
+              </p>
+            )}
           </div>
           <audio ref={audioRef} src={audioUrl} className="hidden" />
+
+          {/* Challenge Area */}
           {!showResult ? (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {choices.map((choice) => (
-                <Card
-                  key={choice.id}
-                  className="cursor-pointer hover:shadow-lg transition-all border-2 hover:border-indigo-300"
-                  onClick={() => handleChoiceSelect(choice.id)}
-                >
-                  <CardContent className="p-6 text-center">
-                    <p className="text-lg font-medium">{choice.translation}</p>
-                  </CardContent>
-                </Card>
-              ))}
-            </div>
-          ) : (
-            <div className="space-y-4">
+            challengeType === "choice" ? (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {choices.map((choice) => {
-                  const isSelected = selectedChoice === choice.id;
-                  const isCorrectChoice = choice.isCorrect;
-
-                  let cardStyle = "border-2 ";
-                  if (isSelected && isCorrectChoice) {
-                    cardStyle += "bg-green-50 border-green-500";
-                  } else if (isSelected && !isCorrectChoice) {
-                    cardStyle += "bg-red-50 border-red-500";
-                  } else if (isCorrectChoice) {
-                    cardStyle += "bg-green-50 border-green-500";
-                  } else {
-                    cardStyle += "border-gray-200";
-                  }
-
-                  return (
-                    <Card key={choice.id} className={cardStyle}>
-                      <CardContent className="p-6 text-center relative">
-                        <p className="text-lg font-medium">
-                          {choice.translation}
-                        </p>
-                        {isSelected && (
-                          <div className="absolute top-2 right-2">
-                            {isCorrectChoice ? (
-                              <Check className="h-5 w-5 text-green-600" />
-                            ) : (
-                              <X className="h-5 w-5 text-red-600" />
-                            )}
-                          </div>
-                        )}
-                        {!isSelected && isCorrectChoice && (
-                          <div className="absolute top-2 right-2">
-                            <Check className="h-5 w-5 text-green-600" />
-                          </div>
-                        )}
-                      </CardContent>
-                    </Card>
-                  );
-                })}
+                {choices.map((choice) => (
+                  <Card
+                    key={choice.id}
+                    className="cursor-pointer hover:shadow-lg transition-all border-2 hover:border-indigo-300"
+                    onClick={() => handleChoiceSelect(choice.id)}
+                  >
+                    <CardContent className="p-6 text-center">
+                      <p className="text-lg font-medium">
+                        {choice.translation}
+                      </p>
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
+            ) : ( // Typing challenge UI
+              <div className="space-y-4 flex flex-col items-center">
+                <input
+                  type="text"
+                  value={typedAnswer}
+                  onChange={(e) => setTypedAnswer(e.target.value)}
+                  placeholder="Type the translation"
+                  className="input input-bordered w-full max-w-md p-3 border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                  onKeyPress={(e) => e.key === 'Enter' && handleTypingSubmit()}
+                />
+                <Button onClick={handleTypingSubmit} className="max-w-md w-full">
+                  Submit Answer
+                </Button>
+              </div>
+            )
+          ) : (
+            // Result Display Area (common for both challenge types)
+            <div className="space-y-4">
+              {challengeType === "choice" && ( // Show choices only if it was a choice question
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  {choices.map((choice) => {
+                    const isSelected = selectedChoice === choice.id;
+                    const isCorrectChoice = choice.isCorrect;
+                    let cardStyle = "border-2 ";
+                    if (isSelected && isCorrectChoice)
+                      cardStyle += "bg-green-50 border-green-500";
+                    else if (isSelected && !isCorrectChoice)
+                      cardStyle += "bg-red-50 border-red-500";
+                    else if (isCorrectChoice)
+                      cardStyle += "bg-green-50 border-green-500";
+                    else cardStyle += "border-gray-200";
+                    return (
+                      <Card key={choice.id} className={cardStyle}>
+                        <CardContent className="p-6 text-center relative">
+                          <p className="text-lg font-medium">
+                            {choice.translation}
+                          </p>
+                          {isSelected && (
+                            <div className="absolute top-2 right-2">
+                              {isCorrectChoice ? (
+                                <Check className="h-5 w-5 text-green-600" />
+                              ) : (
+                                <X className="h-5 w-5 text-red-600" />
+                              )}
+                            </div>
+                          )}
+                          {!isSelected && isCorrectChoice && (
+                            <div className="absolute top-2 right-2">
+                              <Check className="h-5 w-5 text-green-600" />
+                            </div>
+                          )}
+                        </CardContent>
+                      </Card>
+                    );
+                  })}
+                </div>
+              )}
 
+              {/* Feedback Message */}
               <div
                 className={`p-4 rounded-lg text-center ${
                   isCorrect
