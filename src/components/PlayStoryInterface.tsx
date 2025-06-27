@@ -182,14 +182,14 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
                 )}
               </div>
               <div>
-                <p className="text-3xl font-semibold text-indigo-600 mb-1">
+                <p className="text-3xl font-semibold text-indigo-600 mb-3"> {/* Adjusted mb here for overall spacing */}
                   {currentBit.word}
+                  {vocabularyWords && vocabularyWords.length > 0 && (
+                    <span className="text-xl text-gray-500 ml-2">
+                      ({vocabularyWords.find(vw => vw.word === currentBit.word)?.translation || "Translation not found"})
+                    </span>
+                  )}
                 </p>
-                {vocabularyWords && vocabularyWords.length > 0 && (
-                  <p className="text-xl text-gray-500 mb-3">
-                    {vocabularyWords.find(vw => vw.word === currentBit.word)?.translation || "Translation not found"}
-                  </p>
-                )}
                 <p className="text-lg text-gray-700 leading-relaxed">
                   {renderDescriptionWithBoldWord(currentBit.sentence, currentBit.word)}
                 </p>
