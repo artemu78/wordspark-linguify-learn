@@ -1,0 +1,184 @@
+import {
+  GoogleGenerativeAI,
+  HarmCategory,
+  HarmBlockThreshold,
+} from "https://esm.sh/@google/generative-ai@0.11.3"; // Using ESM import for Deno
+
+// Helper function to return JSON response
+const jsonResponse = (data: any, status: number = 200) => {
+  return new Response(JSON.stringify(data), {
+    status: status,
+    headers: {
+      "Content-Type": "application/json",
+      "Access-Control-Allow-Origin": "*", // Or your specific client domain
+      "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+    },
+  });
+};
+
+// Helper function to return error response
+const errorResponse = (message: string, status: number = 500, details?: any) => {
+  console.error(`[EdgeFunctionError] Status: ${status}, Message: ${message}`, details);
+  return jsonResponse({ error: message, details }, status);
+};
+
+interface WordDetail {
+  word: string;
+  translation?: string;
+}
+
+interface GeminiStoryBit {
+  word: string;
+  storyBitDescription: string;
+  imagePrompt: string;
+}
+
+Deno.serve(async (req: Request) => {
+  // Handle CORS preflight requests
+  if (req.method === "OPTIONS") {
+    return new Response(null, {
+      status: 204, // No Content
+      headers: {
+        "Access-Control-Allow-Origin": "*", // Or your specific client domain
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+        "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+      },
+    });
+  }
+
+  if (req.method !== "POST") {
+    return errorResponse("Method Not Allowed. Please use POST.", 405);
+  }
+
+  let payload;
+  try {
+    payload = await req.json();
+  } catch (e) {
+    return errorResponse("Invalid JSON payload.", 400, e.message);
+  }
+
+  const {
+    words,
+    vocabularyTitle,
+    sourceLanguage,
+    targetLanguage,
+  } = payload;
+
+  if (!Array.isArray(words) || words.length === 0 || !vocabularyTitle || !sourceLanguage || !targetLanguage) {
+    return errorResponse("Missing required fields in payload: words, vocabularyTitle, sourceLanguage, targetLanguage.", 400);
+  }
+
+  const apiKey = Deno.env.get("GEMINI_API_KEY");
+  if (!apiKey) {
+    return errorResponse("GEMINI_API_KEY is not set in environment variables.", 500, "API_KEY_MISSING");
+  }
+
+  try {
+    const genAI = new GoogleGenerativeAI(apiKey);
+    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+
+    const generationConfig = {
+      temperature: 0.7,
+      topK: 1,
+      topP: 1,
+      maxOutputTokens: 8192,
+      response_mime_type: "application/json",
+    };
+
+    const safetySettings = [
+      { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+      { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+      { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+      { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+    ];
+
+    const wordList = words.map((w: WordDetail) => w.word).join(", ");
+
+    const prompt = `
+      You are a creative storyteller for a language learning app.
+      Your task is to create an engaging and coherent story using a specific list of words from a vocabulary titled "${vocabularyTitle}".
+      The story should be written in ${targetLanguage}.
+      The vocabulary words are in ${sourceLanguage}. The words are: ${wordList}.
+
+      The story must be broken down into several "bits" or parts. Each bit must prominently feature one of the provided vocabulary words.
+      The number of story bits must be exactly equal to the number of words provided (${words.length} words = ${words.length} bits).
+      The story bits must flow logically and form a single, connected narrative.
+
+      For each story bit, you must provide:
+      1.  "word": The specific vocabulary word (from the provided list in ${sourceLanguage}) that is central to this bit.
+      2.  "storyBitDescription": A short description of this part of the story (1-2 sentences) in ${targetLanguage}. This description should naturally incorporate or be about the specified "word".
+      3.  "imagePrompt": A detailed, captivating prompt (in English) for an AI image generator to create an illustration for this story bit. The prompt should describe a scene that visually represents the storyBitDescription. Maintain a consistent artistic style across all image prompts (e.g., "digital painting, vibrant colors, whimsical style" or "Studio Ghibli inspired anime style").
+
+      The output MUST be a valid JSON array of objects, where each object represents a story bit and has the following structure:
+      {
+        "word": "the ${sourceLanguage} word",
+        "storyBitDescription": "the story segment in ${targetLanguage}",
+        "imagePrompt": "the detailed image prompt in English"
+      }
+
+      Ensure the story is age-appropriate and engaging for language learners.
+      Make sure to use all the words from the list: ${wordList}.
+      Do not include any extra text or explanation outside of the JSON array.
+    `;
+
+    const result = await model.generateContent({
+      contents: [{ role: "user", parts: [{ text: prompt }] }],
+      generationConfig,
+      safetySettings,
+    });
+
+    const response = result.response;
+    const responseText = response.text();
+
+    if (!responseText) {
+      return errorResponse("Received an empty response from Gemini API.", 500, "GEMINI_EMPTY_RESPONSE");
+    }
+
+    let parsedResponse: GeminiStoryBit[];
+    try {
+      parsedResponse = JSON.parse(responseText);
+    } catch (parseError: any) {
+      console.error("Failed to parse Gemini response in Edge Function:", parseError);
+      return errorResponse(
+        `Failed to parse JSON response from Gemini. Raw response snippet: ${responseText.substring(0, 200)}...`,
+        500,
+        { error: parseError.message, response: responseText.substring(0, 200) + "..." }
+      );
+    }
+
+    if (!Array.isArray(parsedResponse) || parsedResponse.length !== words.length) {
+      return errorResponse(
+        `Gemini response is not a valid array or does not match the expected number of story bits. Expected ${words.length}, got ${parsedResponse.length}.`,
+        500,
+        "GEMINI_RESPONSE_MISMATCH"
+      );
+    }
+    parsedResponse.forEach((bit, index) => {
+      if (!bit.word || !bit.storyBitDescription || !bit.imagePrompt) {
+        // This error will be caught by the main try-catch and returned as a 500
+        throw new Error(
+          `Gemini response bit ${index} is missing required fields. Bit: ${JSON.stringify(bit)}`
+        );
+      }
+    });
+
+    return jsonResponse(parsedResponse);
+
+  } catch (error: any) {
+    console.error("Error in Supabase Edge Function 'generate-story-with-gemini':", error);
+    // Check for specific Gemini API error structures if available from SDK
+    // For example, error.response?.promptFeedback might contain safety-related blocks
+    if (error.message?.includes("SAFETY")) {
+      return errorResponse(
+        "Content generation blocked by Gemini due to safety settings.",
+        400, // Bad request, as the prompt might need adjustment
+        { code: "GEMINI_SAFETY_BLOCK", originalError: error.message }
+      );
+    }
+    return errorResponse(
+      `An unexpected error occurred: ${error.message || "Unknown error"}`,
+      500,
+      { code: "EDGE_FUNCTION_UNEXPECTED_ERROR", originalError: error.message }
+    );
+  }
+});

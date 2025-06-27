@@ -1,23 +1,42 @@
 import { supabase } from "@/integrations/supabase/client";
-import { TablesInsert } from "@/integrations/supabase/types";
+import { TablesInsert, Tables } from "@/integrations/supabase/types";
+import { generateStoryFromWords, GeminiGenerationError, GeminiStoryBit } from "./geminiUtils"; // Added import
 
 export class StoryGenerationError extends Error {
-  constructor(message: string, public code?: string) {
+  constructor(message: string, public code?: string, public originalError?: any) { // Added originalError
     super(message);
     this.name = "StoryGenerationError";
   }
 }
 
 export const generateAndSaveStory = async (
-  vocabularyId: string,
-  vocabularyTitle: string
+  vocabularyId: string
+  // vocabularyTitle is no longer passed as it will be fetched
 ): Promise<string> => { // Returns storyId on success, throws StoryGenerationError on failure
-  // 1. Fetch vocabulary words
+
+  // 1. Fetch vocabulary details (including title and languages)
+  const { data: vocabulary, error: vocabError } = await supabase
+    .from("vocabularies")
+    .select("title, source_language, target_language")
+    .eq("id", vocabularyId)
+    .single();
+
+  if (vocabError) {
+    console.error("Error fetching vocabulary details:", vocabError);
+    throw new StoryGenerationError(`Failed to fetch vocabulary details: ${vocabError.message}`, "FETCH_VOCAB_FAILED");
+  }
+  if (!vocabulary) {
+    throw new StoryGenerationError("Vocabulary not found.", "VOCAB_NOT_FOUND");
+  }
+
+  const { title: vocabularyTitle, source_language: sourceLanguage, target_language: targetLanguage } = vocabulary;
+
+  // 2. Fetch all vocabulary words
   const { data: words, error: wordsError } = await supabase
     .from("vocabulary_words")
-    .select("id, word, translation")
-    .eq("vocabulary_id", vocabularyId)
-    .limit(5);
+    .select("id, word, translation") // translation can be useful for context or future features
+    .eq("vocabulary_id", vocabularyId);
+    // Removed limit(5) to fetch all words
 
   if (wordsError) {
     console.error("Error fetching words for story:", wordsError);
@@ -28,59 +47,88 @@ export const generateAndSaveStory = async (
     throw new StoryGenerationError("Cannot generate a story for a vocabulary with no words.", "NO_WORDS_FOUND");
   }
 
-  // 2. Create Story Entry
-  const storyTitle = `${vocabularyTitle} - Story`;
-    const storyInsert: TablesInsert<"stories"> = {
-      vocabulary_id: vocabularyId,
-      title: storyTitle,
-      // created_by: userId, // If your RLS for stories relies on this field being set explicitly.
-                           // Otherwise, if it uses auth.uid() from the session, this isn't needed here.
-                           // The previous migration used vocabularies.created_by for RLS.
-    };
+  // 3. Generate story using Gemini
+  let geminiStoryBits: GeminiStoryBit[];
+  try {
+    // Prepare words for Gemini. Ensure sourceLanguage and targetLanguage are available.
+    // The current `words` objects from Supabase have `word` and `translation`.
+    // `generateStoryFromWords` expects an array of objects with at least a `word` property.
+    const wordsForGemini = words.map(w => ({ word: w.word, translation: w.translation }));
 
-    const { data: newStory, error: storyError } = await supabase
-      .from("stories")
-      .insert(storyInsert)
-      .select("id")
-      .single();
-
-    if (storyError) {
-      console.error("Error creating story entry:", storyError);
-      throw new StoryGenerationError(`Failed to create story entry: ${storyError.message}`, "STORY_CREATION_FAILED");
-    }
-    if (!newStory) {
-      // This case should ideally be covered by storyError, but as a safeguard:
-      throw new StoryGenerationError("Failed to create story entry (no data returned).", "STORY_CREATION_NO_ID");
+    if (!sourceLanguage || !targetLanguage) {
+        throw new StoryGenerationError(
+            "Source or target language not found for the vocabulary. Cannot generate story.",
+            "LANGUAGES_MISSING"
+        );
     }
 
-    // 3. Create Story Bits
-    const storyBitsInsert: TablesInsert<"story_bits">[] = words.map(
-      (wordData, index) => ({
+    geminiStoryBits = await generateStoryFromWords(wordsForGemini, vocabularyTitle, sourceLanguage, targetLanguage);
+  } catch (error: any) {
+    console.error("Error generating story via Edge Function (Gemini):", error);
+    if (error instanceof GeminiGenerationError) {
+      // Propagate Gemini-specific errors (now from Edge Function call) with more context
+      throw new StoryGenerationError(`Story generation service failed: ${error.message}`, "STORY_SERVICE_FAILED", error.details);
+    }
+    throw new StoryGenerationError(`Failed to generate story content: ${error.message}`, "STORY_CONTENT_GENERATION_FAILED", error);
+  }
+
+  // 4. Create Story Entry in Supabase
+  const storyTitle = `${vocabularyTitle} - AI Story`; // Updated title to reflect AI generation
+  const storyInsert: TablesInsert<"stories"> = {
+    vocabulary_id: vocabularyId,
+    title: storyTitle,
+  };
+
+  const { data: newStory, error: storyError } = await supabase
+    .from("stories")
+    .insert(storyInsert)
+    .select("id")
+    .single();
+
+  if (storyError) {
+    console.error("Error creating story entry:", storyError);
+    throw new StoryGenerationError(`Failed to create story entry: ${storyError.message}`, "STORY_CREATION_FAILED");
+  }
+  if (!newStory) {
+    throw new StoryGenerationError("Failed to create story entry (no data returned).", "STORY_CREATION_NO_ID");
+  }
+
+  // 5. Create Story Bits in Supabase using Gemini response
+  // Ensure the order of geminiStoryBits matches the intended sequence.
+  // The prompt to Gemini requests the bits in order of the words provided.
+  // We should ensure the words from Supabase are consistently ordered if sequence matters beyond Gemini's output.
+  // For now, we assume Gemini returns them in a usable order corresponding to the input word list.
+
+  const storyBitsInsert: TablesInsert<"story_bits">[] = geminiStoryBits.map(
+    (geminiBit, index) => {
+      // It's important to ensure the 'word' from Gemini response is one of the original words
+      // and is in the source language. The prompt guides Gemini to do this.
+      const originalWordEntry = words.find(w => w.word === geminiBit.word);
+
+      return {
         story_id: newStory.id,
         sequence_number: index + 1,
-        word: wordData.word,
-        sentence: `This is a simple sentence featuring the word "${wordData.word}". The translation is "${wordData.translation}".`,
-        image_url: "/placeholder.svg", // Using a public placeholder
-      })
-    );
-
-    const { error: bitsError } = await supabase
-      .from("story_bits")
-      .insert(storyBitsInsert);
-
-    if (bitsError) {
-      console.error("Error inserting story bits:", bitsError);
-      // Attempt to clean up the created story entry if bits fail
-      try {
-        await supabase.from("stories").delete().eq("id", newStory.id);
-      } catch (cleanupError) {
-        console.error("Failed to cleanup story after bits insertion failure:", cleanupError);
-        // Log this, but the original error is more important to throw
-      }
-      throw new StoryGenerationError(`Failed to insert story bits: ${bitsError.message}`, "BITS_INSERTION_FAILED");
+        word: geminiBit.word, // This should be the word in the source language, as per Gemini prompt
+        sentence: geminiBit.storyBitDescription, // This is the story part in the target language
+        image_prompt: geminiBit.imagePrompt, // The prompt for image generation
+        image_url: "/placeholder.svg", // Using a public placeholder, image generation is separate
+      };
     }
+  );
 
-    return newStory.id;
-  // No catch block here, let errors propagate to be handled by the calling component's try/catch
-  // This allows components to use their own toast mechanisms and loading states.
+  const { error: bitsError } = await supabase
+    .from("story_bits")
+    .insert(storyBitsInsert);
+
+  if (bitsError) {
+    console.error("Error inserting story bits:", bitsError);
+    try {
+      await supabase.from("stories").delete().eq("id", newStory.id);
+    } catch (cleanupError) {
+      console.error("Failed to cleanup story after bits insertion failure:", cleanupError);
+    }
+    throw new StoryGenerationError(`Failed to insert story bits: ${bitsError.message}`, "BITS_INSERTION_FAILED");
+  }
+
+  return newStory.id;
 };

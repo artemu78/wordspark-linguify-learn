@@ -224,6 +224,7 @@ export type Database = {
           word: string
           sentence: string
           image_url: string | null
+          image_prompt: string | null // Added image_prompt
           created_at: string
         }
         Insert: {
@@ -233,6 +234,7 @@ export type Database = {
           word: string
           sentence: string
           image_url?: string | null
+          image_prompt?: string | null // Added image_prompt
           created_at?: string
         }
         Update: {
@@ -242,6 +244,7 @@ export type Database = {
           word?: string
           sentence?: string
           image_url?: string | null
+          image_prompt?: string | null // Added image_prompt
           created_at?: string
         }
         Relationships: [
