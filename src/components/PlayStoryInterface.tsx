@@ -4,9 +4,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { ArrowLeft, ChevronLeft, ChevronRight, RotateCcw, BookOpen } from "lucide-react";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Tables } from "@/integrations/supabase/types"; // Assuming this is where your generated types are
+import { Tables } from "@/integrations/supabase/types";
 
 type StoryBit = Tables<"story_bits">;
+type VocabularyWord = Tables<"vocabulary_words">; // For translations
+type Story = Tables<"stories">; // For getting vocabulary_id
 
 interface PlayStoryInterfaceProps {
   storyId: string;
@@ -16,15 +18,63 @@ interface PlayStoryInterfaceProps {
 
 const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
   storyId,
-  vocabularyTitle,
+  vocabularyTitle, // This might become redundant if fetched with story details, but keep for now
   onBack,
 }) => {
   const [currentBitIndex, setCurrentBitIndex] = useState(0);
 
+  // 1. Fetch the story to get vocabulary_id
+  const { data: storyData, isLoading: isLoadingStory } = useQuery<Story | null, Error>({
+    queryKey: ["story", storyId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from("stories")
+        .select("id, vocabulary_id")
+        .eq("id", storyId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!storyId,
+  });
+  const vocabularyId = storyData?.vocabulary_id;
+
+  // 2. Fetch all words and translations for the vocabulary
+  const { data: vocabularyWords, isLoading: isLoadingVocabWords } = useQuery<VocabularyWord[], Error>({
+    queryKey: ["vocabularyWords", vocabularyId],
+    queryFn: async () => {
+      if (!vocabularyId) return []; // Should not happen if story loads and has vocab_id
+      const { data, error } = await supabase
+        .from("vocabulary_words")
+        .select("id, word, translation")
+        .eq("vocabulary_id", vocabularyId);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!vocabularyId, // Only run if vocabularyId is fetched
+  });
+
+  // Helper function to render the description with the target word bolded
+  const renderDescriptionWithBoldWord = (description: string, wordToBold: string) => {
+    if (!description || !wordToBold) {
+      return description;
+    }
+    // Regex to find the whole word, case-insensitive.
+    // \b matches word boundaries to avoid matching parts of other words.
+    const parts = description.split(new RegExp(`(\\b${wordToBold}\\b)`, 'gi'));
+    return parts.map((part, index) =>
+      part.toLowerCase() === wordToBold.toLowerCase() ? (
+        <strong key={index} className="text-indigo-700">{part}</strong>
+      ) : (
+        part
+      )
+    );
+  };
+
   const {
     data: storyBits,
-    isLoading,
-    error,
+    isLoading: isLoadingStoryBits,
+    error: storyBitsError,
   } = useQuery<StoryBit[], Error>({
     queryKey: ["storyBits", storyId],
     queryFn: async () => {
@@ -61,16 +111,18 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
     setCurrentBitIndex(0);
   };
 
-  if (isLoading) {
+  // Combined loading state
+  if (isLoadingStory || isLoadingVocabWords || isLoadingStoryBits) {
     return (
       <div className="flex flex-col items-center justify-center h-screen">
         <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-indigo-600 mb-4"></div>
-        <p className="text-lg text-gray-700">Loading story...</p>
+        <p className="text-lg text-gray-700">Loading story data...</p>
       </div>
     );
   }
 
-  if (error) {
+  // Error handling for story bits fetch, can be combined with other errors if needed
+  if (storyBitsError) {
     return (
       <div className="flex flex-col items-center justify-center h-screen p-4 text-center">
         <h2 className="text-xl font-semibold text-red-600 mb-2">Error Loading Story</h2>
@@ -130,11 +182,16 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
                 )}
               </div>
               <div>
-                <p className="text-3xl font-semibold text-indigo-600 mb-2">
+                <p className="text-3xl font-semibold text-indigo-600 mb-3"> {/* Adjusted mb here for overall spacing */}
                   {currentBit.word}
+                  {vocabularyWords && vocabularyWords.length > 0 && (
+                    <span className="text-xl text-gray-500 ml-2">
+                      ({vocabularyWords.find(vw => vw.word === currentBit.word)?.translation || "Translation not found"})
+                    </span>
+                  )}
                 </p>
                 <p className="text-lg text-gray-700 leading-relaxed">
-                  {currentBit.sentence}
+                  {renderDescriptionWithBoldWord(currentBit.sentence, currentBit.word)}
                 </p>
               </div>
             </div>
