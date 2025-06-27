@@ -184,6 +184,76 @@ export type Database = {
           },
         ]
       }
+      stories: {
+        Row: {
+          id: string
+          vocabulary_id: string
+          title: string
+          created_at: string
+          updated_at: string
+        }
+        Insert: {
+          id?: string
+          vocabulary_id: string
+          title: string
+          created_at?: string
+          updated_at?: string
+        }
+        Update: {
+          id?: string
+          vocabulary_id?: string
+          title?: string
+          created_at?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stories_vocabulary_id_fkey"
+            columns: ["vocabulary_id"]
+            isOneToOne: false
+            referencedRelation: "vocabularies"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      story_bits: {
+        Row: {
+          id: string
+          story_id: string
+          sequence_number: number
+          word: string
+          sentence: string
+          image_url: string | null
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          story_id: string
+          sequence_number: number
+          word: string
+          sentence: string
+          image_url?: string | null
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          story_id?: string
+          sequence_number?: number
+          word?: string
+          sentence?: string
+          image_url?: string | null
+          created_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "story_bits_story_id_fkey"
+            columns: ["story_id"]
+            isOneToOne: false
+            referencedRelation: "stories"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       [_ in never]: never

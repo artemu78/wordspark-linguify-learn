@@ -6,18 +6,20 @@ import VocabularyList from '@/components/VocabularyList';
 import LearningInterface from '@/components/LearningInterface';
 import CreateVocabulary from '@/components/CreateVocabulary';
 import EditVocabulary from '@/components/EditVocabulary';
+import PlayStoryInterface from '@/components/PlayStoryInterface'; // Added
 
-type View = 'list' | 'learn' | 'create' | 'edit';
+type View = 'list' | 'learn' | 'create' | 'edit' | 'playStory'; // Added 'playStory'
 
-interface SelectedVocabulary {
-  id: string;
-  title: string;
+interface SelectedVocabularyInfo { // Renamed for clarity
+  id: string; // This can be vocabularyId
+  title: string; // This can be vocabularyTitle
+  storyId?: string; // Optional: storyId if navigating to playStory
 }
 
 const Dashboard = () => {
   const { loading } = useAuth();
   const [currentView, setCurrentView] = useState<View>('list');
-  const [selectedVocabulary, setSelectedVocabulary] = useState<SelectedVocabulary | null>(null);
+  const [selectedInfo, setSelectedInfo] = useState<SelectedVocabularyInfo | null>(null); // Renamed state
 
   if (loading) {
     return (
@@ -27,23 +29,37 @@ const Dashboard = () => {
     );
   }
 
-  const handleSelectVocabulary = (vocabulary: any) => {
-    setSelectedVocabulary({ id: vocabulary.id, title: vocabulary.title });
+  const handleSelectVocabulary = (vocabulary: { id: string, title: string }) => {
+    setSelectedInfo({ id: vocabulary.id, title: vocabulary.title });
     setCurrentView('learn');
   };
 
   const handleCreateNew = () => {
     setCurrentView('create');
+    setSelectedInfo(null); // Clear selection when going to create
   };
 
-  const handleEditVocabulary = (vocabulary: any) => {
-    setSelectedVocabulary({ id: vocabulary.id, title: vocabulary.title });
+  const handleEditVocabulary = (vocabulary: { id: string, title: string }) => {
+    setSelectedInfo({ id: vocabulary.id, title: vocabulary.title });
     setCurrentView('edit');
+  };
+
+  const handlePlayStory = (vocabularyId: string, vocabularyTitle: string, storyId?: string) => {
+    if (!storyId) {
+      // This case should ideally be handled by VocabularyList generating a story first
+      // or showing an error if generation fails.
+      console.warn("handlePlayStory called without a storyId. This might indicate an issue.");
+      // Optionally, navigate back or show a message
+      // setCurrentView('list');
+      return;
+    }
+    setSelectedInfo({ id: vocabularyId, title: vocabularyTitle, storyId: storyId });
+    setCurrentView('playStory');
   };
 
   const handleBackToList = () => {
     setCurrentView('list');
-    setSelectedVocabulary(null);
+    setSelectedInfo(null);
   };
 
   return (
@@ -56,13 +72,14 @@ const Dashboard = () => {
             onSelectVocabulary={handleSelectVocabulary}
             onCreateNew={handleCreateNew}
             onEditVocabulary={handleEditVocabulary}
+            onPlayStory={handlePlayStory} // Pass the new handler
           />
         )}
         
-        {currentView === 'learn' && selectedVocabulary && (
+        {currentView === 'learn' && selectedInfo && (
           <LearningInterface
-            vocabularyId={selectedVocabulary.id}
-            vocabularyTitle={selectedVocabulary.title}
+            vocabularyId={selectedInfo.id}
+            vocabularyTitle={selectedInfo.title}
             onBack={handleBackToList}
           />
         )}
@@ -71,9 +88,17 @@ const Dashboard = () => {
           <CreateVocabulary onBack={handleBackToList} />
         )}
 
-        {currentView === 'edit' && selectedVocabulary && (
+        {currentView === 'edit' && selectedInfo && (
           <EditVocabulary 
-            vocabularyId={selectedVocabulary.id}
+            vocabularyId={selectedInfo.id}
+            onBack={handleBackToList}
+          />
+        )}
+
+        {currentView === 'playStory' && selectedInfo && selectedInfo.storyId && (
+          <PlayStoryInterface
+            storyId={selectedInfo.storyId}
+            vocabularyTitle={selectedInfo.title}
             onBack={handleBackToList}
           />
         )}

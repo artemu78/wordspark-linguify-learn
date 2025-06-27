@@ -17,9 +17,11 @@ import {
   Edit,
   RotateCcw,
   Trash2,
+  BookOpen, // Added for Play Story button
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { Tables, TablesInsert } from "@/integrations/supabase/types"; // Added for type safety
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -47,18 +49,21 @@ interface Vocabulary {
   target_language: string;
   is_default: boolean;
   word_count?: number;
+  story_id?: string | null; // Added to hold potential story ID
 }
 
 interface VocabularyListProps {
-  onSelectVocabulary: (vocabulary: Vocabulary) => void;
+  onSelectVocabulary: (vocabulary: Vocabulary) => void; // Vocabulary type here will be the enhanced one
   onCreateNew: () => void;
   onEditVocabulary?: (vocabulary: Vocabulary) => void;
+  onPlayStory: (vocabularyId: string, vocabularyTitle: string, storyId?: string) => void; // Added prop
 }
 
 const VocabularyList = ({
   onSelectVocabulary,
   onCreateNew,
   onEditVocabulary,
+  onPlayStory, // Added prop
 }: VocabularyListProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -67,24 +72,34 @@ const VocabularyList = ({
   const [resetDialogOpen, setResetDialogOpen] = React.useState(false);
   const [selectedVocabulary, setSelectedVocabulary] =
     React.useState<Vocabulary | null>(null);
+  // const [isGeneratingStory, setIsGeneratingStory] = React.useState<string | null>(null); // No longer needed here
 
-  const { data: vocabularies = [], isLoading } = useQuery({
-    queryKey: ["vocabularies"],
+
+  const { data: vocabularies = [], isLoading } = useQuery<Vocabulary[]>({
+    queryKey: ["vocabulariesWithStories"], // Changed queryKey to reflect new data
     queryFn: async () => {
-      const { data, error } = await supabase.from("vocabularies").select(`
+      // Fetch vocabularies and their first story_id if available
+      const { data, error } = await supabase
+        .from("vocabularies")
+        .select(`
           *,
-          vocabulary_words(count)
+          vocabulary_words(count),
+          stories(id)
         `);
-      console.log("Fetched data:", data);
-      if (error) throw error;
+
+      if (error) {
+        console.error("Error fetching vocabularies with stories:", error);
+        throw error;
+      }
 
       return data.map((vocab) => ({
         ...vocab,
         word_count: vocab.vocabulary_words?.[0]?.count || 0,
+        story_id: vocab.stories?.[0]?.id || null, // Extract story_id
       }));
     },
   });
-  console.log("Fetched vocabularies:", vocabularies);
+  // console.log("Fetched vocabularies with stories:", vocabularies);
 
   const { data: userProgress = [] } = useQuery({
     queryKey: ["user-progress-all"],
@@ -300,6 +315,24 @@ const VocabularyList = ({
     }
   };
 
+  // Removed generateDummyStory function from here. It's now in src/lib/storyUtils.ts
+
+  const handlePlayStoryClick = (vocabulary: Vocabulary) => {
+    if (vocabulary.story_id) {
+      onPlayStory(vocabulary.id, vocabulary.title, vocabulary.story_id);
+    } else {
+      // This case should ideally not happen if button is only shown when story_id exists.
+      // However, as a fallback or if there's a UI delay:
+      toast({
+        title: "Story Not Available",
+        description: "This vocabulary does not have a story yet. Please create one first.",
+        variant: "default", // Or "destructive" if it's considered an error state
+      });
+      console.warn("Play Story clicked for vocabulary without a story_id:", vocabulary.title);
+    }
+  };
+
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -326,11 +359,12 @@ const VocabularyList = ({
               vocabulary.word_count || 0
             );
             const isCompleted = isVocabularyCompleted(vocabulary.id);
+            // const currentlyGenerating = isGeneratingStory === vocabulary.id; // Removed
 
             return (
               <Card
                 key={vocabulary.id}
-                className={`hover:shadow-lg transition-shadow ${
+                className={`transition-shadow ${ // Removed hover:shadow-lg
                   isCompleted ? "ring-2 ring-green-200 bg-green-50" : ""
                 }`}
               >
@@ -422,15 +456,29 @@ const VocabularyList = ({
                         {Math.round(progress.progressPercentage)}% complete
                       </div>
                     </div>
-
-                    <Button
-                      onClick={() => onSelectVocabulary(vocabulary)}
-                      className="w-full flex items-center space-x-2"
-                      variant={isCompleted ? "outline" : "default"}
-                    >
-                      <Play className="h-4 w-4" />
-                      <span>{isCompleted ? "Review" : "Start Learning"}</span>
-                    </Button>
+                    <div className="flex space-x-2">
+                      <Button
+                        onClick={() => onSelectVocabulary(vocabulary)}
+                        className="w-full flex items-center space-x-2"
+                        variant={isCompleted ? "outline" : "default"}
+                      >
+                        <Play className="h-4 w-4" />
+                        <span>{isCompleted ? "Review" : "Start Learning"}</span>
+                      </Button>
+                      {vocabulary.story_id && ( // Conditionally render Play Story button
+                        <Button
+                          onClick={() => handlePlayStoryClick(vocabulary)}
+                          className="w-full flex items-center space-x-2"
+                          variant="secondary"
+                          // Word count check might still be relevant if story exists but vocab somehow became empty
+                          // though this scenario is less likely with current story generation logic.
+                          disabled={(vocabulary.word_count || 0) === 0}
+                        >
+                          <BookOpen className="h-4 w-4" />
+                          <span>Play Story</span>
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 </CardContent>
               </Card>

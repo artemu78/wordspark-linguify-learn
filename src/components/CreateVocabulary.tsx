@@ -5,14 +5,17 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Plus, Trash2, Sparkles } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Sparkles, BookPlus } from 'lucide-react'; // Added BookPlus
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { generateAndSaveStory, StoryGenerationError } from '@/lib/storyUtils'; // Added
 
 interface CreateVocabularyProps {
   onBack: () => void;
+  // Consider if onPlayStory is needed if navigating directly after story creation
+  // onPlayStory?: (vocabularyId: string, vocabularyTitle: string, storyId: string) => void;
 }
 
 interface WordPair {
@@ -33,6 +36,10 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
     { word: '', translation: '' }
   ]);
   const [aiWordCount, setAiWordCount] = useState(10);
+  const [createdVocabularyId, setCreatedVocabularyId] = useState<string | null>(null);
+  const [isCreatingStory, setIsCreatingStory] = useState(false);
+  const [storyCreated, setStoryCreated] = useState(false);
+
 
   const generateVocabularyMutation = useMutation({
     mutationFn: async () => {
@@ -102,15 +109,19 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
       
       return vocabulary;
     },
-    onSuccess: () => {
+    onSuccess: (newVocabulary) => {
+      // Don't navigate away immediately. Allow user to create a story.
+      setCreatedVocabularyId(newVocabulary.id);
+      setTitle(newVocabulary.title); // Keep title in state for story generation
       toast({
-        title: "Success!",
-        description: "Vocabulary list created successfully."
+        title: "Vocabulary Saved!",
+        description: "Your new vocabulary list has been saved. You can now create a story for it.",
       });
-      queryClient.invalidateQueries({ queryKey: ['vocabularies'] });
-      onBack();
+      queryClient.invalidateQueries({ queryKey: ['vocabulariesWithStories'] }); // Use the updated query key
+      // onBack(); // Removed: User stays on page to optionally create story
     },
     onError: (error: any) => {
+      setCreatedVocabularyId(null);
       toast({
         title: "Error",
         description: error.message,
@@ -172,149 +183,217 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
     createVocabularyMutation.mutate();
   };
 
+  const handleCreateStory = async () => {
+    if (!createdVocabularyId || !user) {
+      toast({ title: "Error", description: "Vocabulary not saved or user not authenticated.", variant: "destructive" });
+      return;
+    }
+    if (!title) { // Ensure title is available for story generation
+        toast({ title: "Error", description: "Vocabulary title is missing.", variant: "destructive" });
+        return;
+    }
+
+    setIsCreatingStory(true);
+    try {
+      const storyId = await generateAndSaveStory(createdVocabularyId, title);
+      if (storyId) {
+        toast({ title: "Story Created!", description: "Your story has been successfully generated." });
+        setStoryCreated(true); // Mark story as created
+        queryClient.invalidateQueries({ queryKey: ["vocabulariesWithStories"] }); // To update list view if user navigates back
+        // Optionally, navigate to play story or disable button further:
+        // if (onPlayStory) onPlayStory(createdVocabularyId, title, storyId);
+        // else onBack();
+      } else {
+        // Error toast would have been shown by generateAndSaveStory or its caller based on thrown error
+      }
+    } catch (error) {
+      if (error instanceof StoryGenerationError) {
+        toast({ title: `Story Creation Failed: ${error.code || ''}`, description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Story Creation Failed", description: "An unexpected error occurred.", variant: "destructive" });
+      }
+      console.error("Story generation failed:", error);
+    } finally {
+      setIsCreatingStory(false);
+    }
+  };
+
+
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
-        <Button variant="outline" onClick={onBack}>
+        <Button variant="outline" onClick={onBack} disabled={createVocabularyMutation.isPending || isCreatingStory}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
         </Button>
-        <h2 className="text-2xl font-bold text-gray-900">Create New Vocabulary</h2>
+        <h2 className="text-2xl font-bold text-gray-900">
+          {createdVocabularyId ? `Vocabulary: ${title}` : "Create New Vocabulary"}
+        </h2>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Vocabulary Details</CardTitle>
+          <CardTitle>
+            {createdVocabularyId ? "Vocabulary Saved" : "Vocabulary Details"}
+          </CardTitle>
         </CardHeader>
         <CardContent>
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label htmlFor="title">Title</Label>
-                <Input
-                  id="title"
-                  value={title}
-                  onChange={(e) => setTitle(e.target.value)}
-                  placeholder="e.g., Basic French"
-                  required
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="topic">Topic</Label>
-                <Input
-                  id="topic"
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
-                  placeholder="e.g., basic-words"
-                  required
-                />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Source Language</Label>
-                <Select value={sourceLanguage} onValueChange={setSourceLanguage}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="en">English</SelectItem>
-                    <SelectItem value="es">Spanish</SelectItem>
-                    <SelectItem value="fr">French</SelectItem>
-                    <SelectItem value="de">German</SelectItem>
-                    <SelectItem value="it">Italian</SelectItem>
-                    <SelectItem value="tr">Turkish</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Target Language</Label>
-                <Select value={targetLanguage} onValueChange={setTargetLanguage}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="en">English</SelectItem>
-                    <SelectItem value="es">Spanish</SelectItem>
-                    <SelectItem value="fr">French</SelectItem>
-                    <SelectItem value="de">German</SelectItem>
-                    <SelectItem value="it">Italian</SelectItem>
-                    <SelectItem value="tr">Turkish</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
-
-            <div className="space-y-4">
-              <div className="flex justify-between items-center">
-                <Label>Word Pairs</Label>
-                <div className="flex space-x-2">
-                  <div className="flex items-center space-x-2">
-                    <Input
-                      type="number"
-                      value={aiWordCount}
-                      onChange={(e) => setAiWordCount(Number(e.target.value))}
-                      min="5"
-                      max="20"
-                      className="w-16"
-                    />
-                    <Button 
-                      type="button" 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={handleGenerateWithAI}
-                      disabled={generateVocabularyMutation.isPending}
-                    >
-                      <Sparkles className="h-4 w-4 mr-2" />
-                      {generateVocabularyMutation.isPending ? 'Generating...' : 'Generate with AI'}
-                    </Button>
-                  </div>
-                  <Button type="button" variant="outline" size="sm" onClick={addWordPair}>
-                    <Plus className="h-4 w-4 mr-2" />
-                    Add Word
-                  </Button>
+          {!createdVocabularyId ? (
+            <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Form fields for title, topic, languages, word pairs */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="title">Title</Label>
+                  <Input
+                    id="title"
+                    value={title}
+                    onChange={(e) => setTitle(e.target.value)}
+                    placeholder="e.g., Basic French"
+                    required
+                    disabled={createVocabularyMutation.isPending}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="topic">Topic</Label>
+                  <Input
+                    id="topic"
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    placeholder="e.g., basic-words"
+                    required
+                    disabled={createVocabularyMutation.isPending}
+                  />
                 </div>
               </div>
-              
-              <div className="space-y-3">
-                {wordPairs.map((pair, index) => (
-                  <div key={index} className="flex space-x-2 items-center">
-                    <Input
-                      placeholder="Word"
-                      value={pair.word}
-                      onChange={(e) => updateWordPair(index, 'word', e.target.value)}
-                      className="flex-1"
-                    />
-                    <Input
-                      placeholder="Translation"
-                      value={pair.translation}
-                      onChange={(e) => updateWordPair(index, 'translation', e.target.value)}
-                      className="flex-1"
-                    />
-                    {wordPairs.length > 1 && (
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Source Language</Label>
+                  <Select value={sourceLanguage} onValueChange={setSourceLanguage} disabled={createVocabularyMutation.isPending}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="en">English</SelectItem>
+                      <SelectItem value="es">Spanish</SelectItem>
+                      <SelectItem value="fr">French</SelectItem>
+                      <SelectItem value="de">German</SelectItem>
+                      <SelectItem value="it">Italian</SelectItem>
+                      <SelectItem value="tr">Turkish</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>Target Language</Label>
+                  <Select value={targetLanguage} onValueChange={setTargetLanguage} disabled={createVocabularyMutation.isPending}>
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="en">English</SelectItem>
+                      <SelectItem value="es">Spanish</SelectItem>
+                      <SelectItem value="fr">French</SelectItem>
+                      <SelectItem value="de">German</SelectItem>
+                      <SelectItem value="it">Italian</SelectItem>
+                      <SelectItem value="tr">Turkish</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              <div className="space-y-4">
+                <div className="flex justify-between items-center">
+                  <Label>Word Pairs</Label>
+                  <div className="flex space-x-2">
+                    <div className="flex items-center space-x-2">
+                      <Input
+                        type="number"
+                        value={aiWordCount}
+                        onChange={(e) => setAiWordCount(Number(e.target.value))}
+                        min="5"
+                        max="20"
+                        className="w-16"
+                        disabled={createVocabularyMutation.isPending || generateVocabularyMutation.isPending}
+                      />
                       <Button
                         type="button"
                         variant="outline"
                         size="sm"
-                        onClick={() => removeWordPair(index)}
+                        onClick={handleGenerateWithAI}
+                        disabled={createVocabularyMutation.isPending || generateVocabularyMutation.isPending}
                       >
-                        <Trash2 className="h-4 w-4" />
+                        <Sparkles className="h-4 w-4 mr-2" />
+                        {generateVocabularyMutation.isPending ? 'Generating...' : 'Generate with AI'}
                       </Button>
-                    )}
+                    </div>
+                    <Button type="button" variant="outline" size="sm" onClick={addWordPair} disabled={createVocabularyMutation.isPending}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Add Word
+                    </Button>
                   </div>
-                ))}
-              </div>
-            </div>
+                </div>
 
-            <Button 
-              type="submit" 
-              className="w-full" 
-              disabled={createVocabularyMutation.isPending}
-            >
-              {createVocabularyMutation.isPending ? 'Creating...' : 'Create Vocabulary'}
-            </Button>
-          </form>
+                <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
+                  {wordPairs.map((pair, index) => (
+                    <div key={index} className="flex space-x-2 items-center">
+                      <Input
+                        placeholder="Word"
+                        value={pair.word}
+                        onChange={(e) => updateWordPair(index, 'word', e.target.value)}
+                        className="flex-1"
+                        disabled={createVocabularyMutation.isPending}
+                      />
+                      <Input
+                        placeholder="Translation"
+                        value={pair.translation}
+                        onChange={(e) => updateWordPair(index, 'translation', e.target.value)}
+                        className="flex-1"
+                        disabled={createVocabularyMutation.isPending}
+                      />
+                      {wordPairs.length > 1 && (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => removeWordPair(index)}
+                          disabled={createVocabularyMutation.isPending}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              <Button
+                type="submit"
+                className="w-full"
+                disabled={createVocabularyMutation.isPending || wordPairs.filter(p=>p.word && p.translation).length === 0}
+              >
+                {createVocabularyMutation.isPending ? 'Saving Vocabulary...' : 'Save Vocabulary'}
+              </Button>
+            </form>
+          ) : (
+            <div className="space-y-4 text-center">
+              <p className="text-green-600 font-semibold">Vocabulary "{title}" saved successfully!</p>
+              {storyCreated ? (
+                <p className="text-blue-600">Story created for this vocabulary.</p>
+              ) : (
+                <Button
+                  onClick={handleCreateStory}
+                  className="w-full md:w-auto"
+                  disabled={isCreatingStory}
+                >
+                  <BookPlus className="h-4 w-4 mr-2" />
+                  {isCreatingStory ? 'Creating Story...' : 'Create Story for this Vocabulary'}
+                </Button>
+              )}
+               <Button variant="outline" onClick={onBack} className="w-full md:w-auto mt-2">
+                 Done / Back to List
+              </Button>
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
