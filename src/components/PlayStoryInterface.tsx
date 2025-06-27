@@ -21,6 +21,23 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
 }) => {
   const [currentBitIndex, setCurrentBitIndex] = useState(0);
 
+  // Helper function to render the description with the target word bolded
+  const renderDescriptionWithBoldWord = (description: string, wordToBold: string) => {
+    if (!description || !wordToBold) {
+      return description;
+    }
+    // Regex to find the whole word, case-insensitive.
+    // \b matches word boundaries to avoid matching parts of other words.
+    const parts = description.split(new RegExp(`(\\b${wordToBold}\\b)`, 'gi'));
+    return parts.map((part, index) =>
+      part.toLowerCase() === wordToBold.toLowerCase() ? (
+        <strong key={index} className="text-indigo-700">{part}</strong>
+      ) : (
+        part
+      )
+    );
+  };
+
   const {
     data: storyBits,
     isLoading,
@@ -134,7 +151,7 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
                   {currentBit.word}
                 </p>
                 <p className="text-lg text-gray-700 leading-relaxed">
-                  {currentBit.sentence}
+                  {renderDescriptionWithBoldWord(currentBit.sentence, currentBit.word)}
                 </p>
               </div>
             </div>
