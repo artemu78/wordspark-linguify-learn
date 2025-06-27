@@ -430,7 +430,7 @@ const VocabularyList = ({
             return (
               <Card
                 key={vocabulary.id}
-                className={`hover:shadow-lg transition-shadow ${
+                className={`transition-shadow ${ // Removed hover:shadow-lg
                   isCompleted ? "ring-2 ring-green-200 bg-green-50" : ""
                 }`}
               >
