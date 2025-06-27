@@ -141,30 +141,30 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
           )}
         </CardContent>
         <CardFooter className="flex flex-col items-center space-y-4 p-6 bg-gray-50">
-          <div className="text-sm text-gray-600">
-            Bit {currentBitIndex + 1} of {storyBits.length}
-          </div>
-          <div className="flex space-x-3">
+          <div className="flex w-full items-center justify-between space-x-3">
             <Button
               onClick={handlePrevious}
               disabled={currentBitIndex === 0}
               variant="outline"
-              className="w-32"
+              className="flex-1" // Allow button to grow
             >
               <ChevronLeft className="mr-2 h-4 w-4" />
               Previous
             </Button>
+            <div className="text-sm text-gray-600 px-2 whitespace-nowrap"> {/* Page counter */}
+              {currentBitIndex + 1} of {storyBits.length}
+            </div>
             <Button
               onClick={handleNext}
               disabled={currentBitIndex === storyBits.length - 1}
               variant="outline"
-              className="w-32"
+              className="flex-1" // Allow button to grow
             >
               Next
               <ChevronRight className="ml-2 h-4 w-4" />
             </Button>
           </div>
-          <Button onClick={handleRestart} variant="ghost" className="text-indigo-600 hover:text-indigo-700">
+          <Button onClick={handleRestart} variant="ghost" className="text-indigo-600 hover:text-indigo-700 mt-4">
             <RotateCcw className="mr-2 h-4 w-4" />
             Restart Story
           </Button>
