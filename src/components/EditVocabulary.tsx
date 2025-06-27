@@ -1,14 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardFooter } from '@/components/ui/card'; // Added CardFooter
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { ArrowLeft, Plus, Trash2, Sparkles } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, Sparkles, BookPlus } from 'lucide-react'; // Added BookPlus
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
+import { generateAndSaveStory, StoryGenerationError } from '@/lib/storyUtils'; // Added
 
 interface EditVocabularyProps {
   vocabularyId: string;
@@ -32,60 +33,55 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
   const [targetLanguage, setTargetLanguage] = useState('es');
   const [wordPairs, setWordPairs] = useState<WordPair[]>([]);
   const [aiWordCount, setAiWordCount] = useState(10);
+  const [storyId, setStoryId] = useState<string | null>(null);
+  const [isCreatingStory, setIsCreatingStory] = useState(false);
 
-  // Fetch vocabulary details
-  const { data: vocabulary, isLoading } = useQuery({
-    queryKey: ['vocabulary', vocabularyId],
+  // Fetch vocabulary details including story
+  const { data: vocabularyData, isLoading: isLoadingVocabulary } = useQuery({
+    queryKey: ['vocabularyWithStory', vocabularyId], // Updated queryKey
     queryFn: async () => {
-      console.log('Fetching vocabulary:', vocabularyId);
       const { data, error } = await supabase
         .from('vocabularies')
-        .select('*')
+        .select(`
+          *,
+          stories (id)
+        `)
         .eq('id', vocabularyId)
         .single();
       
-      if (error) {
-        console.error('Error fetching vocabulary:', error);
-        throw error;
-      }
-      console.log('Vocabulary data:', data);
+      if (error) throw error;
       return data;
-    }
+    },
   });
 
   // Fetch vocabulary words
-  const { data: words = [] } = useQuery({
-    queryKey: ['vocabulary-words', vocabularyId],
+  const { data: words = [], isLoading: isLoadingWords } = useQuery({
+    queryKey: ['vocabularyWords', vocabularyId], // Consistent key
     queryFn: async () => {
-      console.log('Fetching vocabulary words for:', vocabularyId);
       const { data, error } = await supabase
         .from('vocabulary_words')
         .select('*')
         .eq('vocabulary_id', vocabularyId);
       
-      if (error) {
-        console.error('Error fetching vocabulary words:', error);
-        throw error;
-      }
-      console.log('Vocabulary words:', data);
+      if (error) throw error;
       return data;
-    }
+    },
+    enabled: !!vocabularyId, // Only run if vocabularyId is available
   });
 
   // Populate form when data is loaded
   useEffect(() => {
-    if (vocabulary) {
-      console.log('Setting form data from vocabulary:', vocabulary);
-      setTitle(vocabulary.title);
-      setTopic(vocabulary.topic);
-      setSourceLanguage(vocabulary.source_language);
-      setTargetLanguage(vocabulary.target_language);
+    if (vocabularyData) {
+      setTitle(vocabularyData.title);
+      setTopic(vocabularyData.topic);
+      setSourceLanguage(vocabularyData.source_language);
+      setTargetLanguage(vocabularyData.target_language);
+      setStoryId(vocabularyData.stories?.[0]?.id || null);
     }
-  }, [vocabulary]);
+  }, [vocabularyData]);
 
   useEffect(() => {
     if (words.length > 0) {
-      console.log('Setting word pairs from words:', words);
       setWordPairs(words.map(word => ({
         id: word.id,
         word: word.word,
@@ -193,18 +189,20 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
       }
     },
     onSuccess: () => {
-      console.log('Vocabulary updated successfully');
       toast({
         title: "Success!",
         description: "Vocabulary updated successfully."
       });
-      queryClient.invalidateQueries({ queryKey: ['vocabularies'] });
-      queryClient.invalidateQueries({ queryKey: ['vocabulary', vocabularyId] });
-      queryClient.invalidateQueries({ queryKey: ['vocabulary-words', vocabularyId] });
+      // Invalidate queries that would show this vocabulary, including its story status
+      queryClient.invalidateQueries({ queryKey: ['vocabulariesWithStories'] });
+      queryClient.invalidateQueries({ queryKey: ['vocabularyWithStory', vocabularyId] });
+      queryClient.invalidateQueries({ queryKey: ['vocabularyWords', vocabularyId] });
+      // Potentially stay on page if we want to allow story creation immediately after edit.
+      // For now, matching original behavior of going back.
+      // If staying, ensure 'storyId' state is updated or re-fetched.
       onBack();
     },
     onError: (error: any) => {
-      console.error('Update vocabulary error:', error);
       toast({
         title: "Error",
         description: error.message || "Failed to update vocabulary",
@@ -270,7 +268,38 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
     updateVocabularyMutation.mutate();
   };
 
-  if (isLoading) {
+  const handleCreateStory = async () => {
+    if (!vocabularyId || !user) {
+      toast({ title: "Error", description: "Vocabulary ID missing or user not authenticated.", variant: "destructive" });
+      return;
+    }
+    if (!title) { // Ensure title is available (it should be from vocabularyData)
+        toast({ title: "Error", description: "Vocabulary title is missing.", variant: "destructive" });
+        return;
+    }
+
+    setIsCreatingStory(true);
+    try {
+      const newStoryId = await generateAndSaveStory(vocabularyId, title); // title is from state, kept in sync with vocabularyData
+      if (newStoryId) {
+        toast({ title: "Story Created!", description: "Your story has been successfully generated." });
+        setStoryId(newStoryId); // Update local state to reflect story creation
+        queryClient.invalidateQueries({ queryKey: ['vocabulariesWithStories'] });
+        queryClient.invalidateQueries({ queryKey: ['vocabularyWithStory', vocabularyId] });
+      }
+    } catch (error) {
+      if (error instanceof StoryGenerationError) {
+        toast({ title: `Story Creation Failed: ${error.code || ''}`, description: error.message, variant: "destructive" });
+      } else {
+        toast({ title: "Story Creation Failed", description: "An unexpected error occurred.", variant: "destructive" });
+      }
+      console.error("Story generation failed:", error);
+    } finally {
+      setIsCreatingStory(false);
+    }
+  };
+
+  if (isLoadingVocabulary || isLoadingWords) {
     return (
       <div className="flex justify-center items-center h-64">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
@@ -281,11 +310,11 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
   return (
     <div className="max-w-2xl mx-auto space-y-6">
       <div className="flex items-center justify-between">
-        <Button variant="outline" onClick={onBack}>
+        <Button variant="outline" onClick={onBack} disabled={updateVocabularyMutation.isPending || isCreatingStory}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
         </Button>
-        <h2 className="text-2xl font-bold text-gray-900">Edit Vocabulary</h2>
+        <h2 className="text-2xl font-bold text-gray-900">Edit Vocabulary: {title}</h2>
       </div>
 
       <Card>
@@ -294,6 +323,7 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-6">
+            {/* Form fields remain largely the same, ensure they are disabled during mutations */}
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="title">Title</Label>
@@ -303,6 +333,7 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                   onChange={(e) => setTitle(e.target.value)}
                   placeholder="e.g., Basic French"
                   required
+                  disabled={updateVocabularyMutation.isPending || isCreatingStory}
                 />
               </div>
               <div className="space-y-2">
@@ -313,6 +344,7 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                   onChange={(e) => setTopic(e.target.value)}
                   placeholder="e.g., basic-words"
                   required
+                  disabled={updateVocabularyMutation.isPending || isCreatingStory}
                 />
               </div>
             </div>
@@ -320,7 +352,7 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Source Language</Label>
-                <Select value={sourceLanguage} onValueChange={setSourceLanguage}>
+                <Select value={sourceLanguage} onValueChange={setSourceLanguage} disabled={updateVocabularyMutation.isPending || isCreatingStory}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -336,7 +368,7 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
               </div>
               <div className="space-y-2">
                 <Label>Target Language</Label>
-                <Select value={targetLanguage} onValueChange={setTargetLanguage}>
+                <Select value={targetLanguage} onValueChange={setTargetLanguage} disabled={updateVocabularyMutation.isPending || isCreatingStory}>
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
@@ -364,26 +396,27 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                       min="5"
                       max="20"
                       className="w-16"
+                      disabled={updateVocabularyMutation.isPending || generateVocabularyMutation.isPending || isCreatingStory}
                     />
                     <Button 
                       type="button" 
                       variant="outline" 
                       size="sm" 
                       onClick={handleGenerateWithAI}
-                      disabled={generateVocabularyMutation.isPending}
+                      disabled={updateVocabularyMutation.isPending || generateVocabularyMutation.isPending || isCreatingStory}
                     >
                       <Sparkles className="h-4 w-4 mr-2" />
                       {generateVocabularyMutation.isPending ? 'Generating...' : 'Generate with AI'}
                     </Button>
                   </div>
-                  <Button type="button" variant="outline" size="sm" onClick={addWordPair}>
+                  <Button type="button" variant="outline" size="sm" onClick={addWordPair} disabled={updateVocabularyMutation.isPending || isCreatingStory}>
                     <Plus className="h-4 w-4 mr-2" />
                     Add Word
                   </Button>
                 </div>
               </div>
               
-              <div className="space-y-3">
+              <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
                 {wordPairs.map((pair, index) => (
                   <div key={index} className="flex space-x-2 items-center">
                     <Input
@@ -391,12 +424,14 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                       value={pair.word}
                       onChange={(e) => updateWordPair(index, 'word', e.target.value)}
                       className="flex-1"
+                      disabled={updateVocabularyMutation.isPending || isCreatingStory}
                     />
                     <Input
                       placeholder="Translation"
                       value={pair.translation}
                       onChange={(e) => updateWordPair(index, 'translation', e.target.value)}
                       className="flex-1"
+                      disabled={updateVocabularyMutation.isPending || isCreatingStory}
                     />
                     {wordPairs.length > 1 && (
                       <Button
@@ -404,6 +439,7 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                         variant="outline"
                         size="sm"
                         onClick={() => removeWordPair(index)}
+                        disabled={updateVocabularyMutation.isPending || isCreatingStory}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
@@ -416,12 +452,26 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
             <Button 
               type="submit" 
               className="w-full" 
-              disabled={updateVocabularyMutation.isPending}
+              disabled={updateVocabularyMutation.isPending || isCreatingStory || wordPairs.filter(p=>p.word && p.translation).length === 0}
             >
-              {updateVocabularyMutation.isPending ? 'Updating...' : 'Update Vocabulary'}
+              {updateVocabularyMutation.isPending ? 'Updating Vocabulary...' : 'Update Vocabulary'}
             </Button>
           </form>
         </CardContent>
+        <CardFooter className="flex flex-col items-center pt-6 border-t">
+          {storyId ? (
+            <p className="text-blue-600 font-semibold">A story already exists for this vocabulary.</p>
+          ) : (
+            <Button
+              onClick={handleCreateStory}
+              className="w-full md:w-auto"
+              disabled={isCreatingStory || updateVocabularyMutation.isPending || wordPairs.filter(p=>p.word && p.translation).length === 0}
+            >
+              <BookPlus className="h-4 w-4 mr-2" />
+              {isCreatingStory ? 'Creating Story...' : 'Create Story for this Vocabulary'}
+            </Button>
+          )}
+        </CardFooter>
       </Card>
     </div>
   );
