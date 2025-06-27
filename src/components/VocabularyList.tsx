@@ -17,9 +17,11 @@ import {
   Edit,
   RotateCcw,
   Trash2,
+  BookOpen, // Added for Play Story button
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { Tables, TablesInsert } from "@/integrations/supabase/types"; // Added for type safety
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -53,12 +55,14 @@ interface VocabularyListProps {
   onSelectVocabulary: (vocabulary: Vocabulary) => void;
   onCreateNew: () => void;
   onEditVocabulary?: (vocabulary: Vocabulary) => void;
+  onPlayStory: (vocabularyId: string, vocabularyTitle: string, storyId?: string) => void; // Added prop
 }
 
 const VocabularyList = ({
   onSelectVocabulary,
   onCreateNew,
   onEditVocabulary,
+  onPlayStory, // Added prop
 }: VocabularyListProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -67,8 +71,10 @@ const VocabularyList = ({
   const [resetDialogOpen, setResetDialogOpen] = React.useState(false);
   const [selectedVocabulary, setSelectedVocabulary] =
     React.useState<Vocabulary | null>(null);
+  const [isGeneratingStory, setIsGeneratingStory] = React.useState<string | null>(null);
 
-  const { data: vocabularies = [], isLoading } = useQuery({
+
+  const { data: vocabularies = [], isLoading } = useQuery<Vocabulary[]>({ // Added type for useQuery
     queryKey: ["vocabularies"],
     queryFn: async () => {
       const { data, error } = await supabase.from("vocabularies").select(`
@@ -300,6 +306,99 @@ const VocabularyList = ({
     }
   };
 
+  // --- Story Generation Logic ---
+  const generateDummyStory = async (vocab: Vocabulary): Promise<string | null> => {
+    if (!user) {
+      toast({ title: "Authentication Error", description: "You must be logged in to create a story.", variant: "destructive" });
+      return null;
+    }
+    setIsGeneratingStory(vocab.id);
+
+    try {
+      // 1. Fetch vocabulary words
+      const { data: words, error: wordsError } = await supabase
+        .from("vocabulary_words")
+        .select("id, word, translation")
+        .eq("vocabulary_id", vocab.id)
+        .limit(5); // Limit to 5 words for a short story
+
+      if (wordsError) throw wordsError;
+      if (!words || words.length === 0) {
+        toast({ title: "No Words Found", description: "Cannot generate a story for a vocabulary with no words.", variant: "destructive" });
+        return null;
+      }
+
+      // 2. Create Story Entry
+      const storyTitle = `${vocab.title} - Story`;
+      const storyInsert: TablesInsert<"stories"> = {
+        vocabulary_id: vocab.id,
+        title: storyTitle,
+        // created_by: user.id, // Assuming your stories table has created_by, adjust if not
+      };
+      const { data: newStory, error: storyError } = await supabase
+        .from("stories")
+        .insert(storyInsert)
+        .select("id")
+        .single();
+
+      if (storyError) throw storyError;
+      if (!newStory) throw new Error("Failed to create story entry.");
+
+      // 3. Create Story Bits
+      const storyBitsInsert: TablesInsert<"story_bits">[] = words.map((wordData, index) => ({
+        story_id: newStory.id,
+        sequence_number: index + 1,
+        word: wordData.word,
+        sentence: `This is a simple sentence featuring the word "${wordData.word}". The translation is "${wordData.translation}".`,
+        image_url: "/placeholder.svg", // Using a public placeholder
+      }));
+
+      const { error: bitsError } = await supabase.from("story_bits").insert(storyBitsInsert);
+      if (bitsError) throw bitsError;
+
+      toast({ title: "Story Generated!", description: `Successfully created a story for ${vocab.title}.` });
+      queryClient.invalidateQueries({ queryKey: ["stories", vocab.id] }); // Invalidate if you cache stories separately
+      return newStory.id;
+
+    } catch (error: any) {
+      console.error("Error generating dummy story:", error);
+      toast({
+        title: "Story Generation Failed",
+        description: error.message || "Could not generate the story. Please try again.",
+        variant: "destructive",
+      });
+      return null;
+    } finally {
+      setIsGeneratingStory(null);
+    }
+  };
+
+
+  const handlePlayStoryClick = async (vocabulary: Vocabulary) => {
+    // Check if a story already exists
+    const { data: existingStories, error: fetchError } = await supabase
+      .from("stories")
+      .select("id")
+      .eq("vocabulary_id", vocabulary.id)
+      .limit(1);
+
+    if (fetchError) {
+      toast({ title: "Error", description: "Could not check for existing stories.", variant: "destructive" });
+      return;
+    }
+
+    if (existingStories && existingStories.length > 0) {
+      onPlayStory(vocabulary.id, vocabulary.title, existingStories[0].id);
+    } else {
+      // No story exists, generate one
+      const newStoryId = await generateDummyStory(vocabulary);
+      if (newStoryId) {
+        onPlayStory(vocabulary.id, vocabulary.title, newStoryId);
+      }
+    }
+  };
+
+
   if (isLoading) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -326,6 +425,7 @@ const VocabularyList = ({
               vocabulary.word_count || 0
             );
             const isCompleted = isVocabularyCompleted(vocabulary.id);
+            const currentlyGenerating = isGeneratingStory === vocabulary.id;
 
             return (
               <Card
@@ -422,15 +522,29 @@ const VocabularyList = ({
                         {Math.round(progress.progressPercentage)}% complete
                       </div>
                     </div>
-
-                    <Button
-                      onClick={() => onSelectVocabulary(vocabulary)}
-                      className="w-full flex items-center space-x-2"
-                      variant={isCompleted ? "outline" : "default"}
-                    >
-                      <Play className="h-4 w-4" />
-                      <span>{isCompleted ? "Review" : "Start Learning"}</span>
-                    </Button>
+                    <div className="flex space-x-2">
+                      <Button
+                        onClick={() => onSelectVocabulary(vocabulary)}
+                        className="w-full flex items-center space-x-2"
+                        variant={isCompleted ? "outline" : "default"}
+                      >
+                        <Play className="h-4 w-4" />
+                        <span>{isCompleted ? "Review" : "Start Learning"}</span>
+                      </Button>
+                      <Button
+                        onClick={() => handlePlayStoryClick(vocabulary)}
+                        className="w-full flex items-center space-x-2"
+                        variant="secondary"
+                        disabled={currentlyGenerating || (vocabulary.word_count || 0) === 0}
+                      >
+                        {currentlyGenerating ? (
+                          <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-current"></div>
+                        ) : (
+                          <BookOpen className="h-4 w-4" />
+                        )}
+                        <span>{currentlyGenerating ? "Generating..." : "Play Story"}</span>
+                      </Button>
+                    </div>
                   </div>
                 </CardContent>
               </Card>
