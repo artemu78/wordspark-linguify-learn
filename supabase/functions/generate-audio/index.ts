@@ -6,7 +6,15 @@ const corsHeaders = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
-const SUPABASE_BUCKET_NAME = "wordspark-files";
+
+const getEnvVariable = (varName: string) => {
+  const value = Deno.env.get(varName);
+  if (!value) {
+    throw new Error(`Environment variable ${varName} is not set`);
+  }
+  return value;
+};
+
 const ELEVENLABS_VOICE_ID = "9BWtsMINqrJLrRacOk9x";
 const ELEVENLABS_MODEL_ID = "eleven_multilingual_v2";
 function transliterate(str) {
@@ -29,11 +37,11 @@ function transliterate(str) {
 // Helper function to handle Supabase storage upload and get public URL
 async function uploadToStorage(filePath, data, contentType) {
   const supabaseClient = createClient(
-    Deno.env.get("SUPABASE_URL") ?? "",
-    Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    getEnvVariable("SUPABASE_URL") ?? "",
+    getEnvVariable("SUPABASE_SERVICE_ROLE_KEY") ?? ""
   );
   const { error: storageError } = await supabaseClient.storage
-    .from(SUPABASE_BUCKET_NAME)
+    .from(getEnvVariable("BUCKET_NAME"))
     .upload(filePath, data, {
       contentType,
       upsert: true,
@@ -42,7 +50,7 @@ async function uploadToStorage(filePath, data, contentType) {
     throw new Error(`Supabase Storage error: ${storageError.message}`);
   }
   const { data: publicUrlData } = supabaseClient.storage
-    .from(SUPABASE_BUCKET_NAME)
+    .from(getEnvVariable("BUCKET_NAME"))
     .getPublicUrl(filePath);
   if (!publicUrlData || !publicUrlData.publicUrl) {
     throw new Error("Could not get public URL for file");
@@ -57,7 +65,7 @@ serve(async (req) => {
   }
   try {
     const { word, languageCode } = await req.json();
-    const apiKey = Deno.env.get("GEMINI_API_KEY");
+    const apiKey = getEnvVariable("GEMINI_API_KEY");
     if (!word) {
       throw new Error("Missing 'word' in request body");
     }
@@ -74,7 +82,7 @@ serve(async (req) => {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
-          "xi-api-key": Deno.env.get("ELEVENLABS_API_KEY"),
+          "xi-api-key": getEnvVariable("ELEVENLABS_API_KEY"),
         },
         body: JSON.stringify({
           text: word,

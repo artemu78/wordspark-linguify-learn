@@ -50,13 +50,19 @@ interface Vocabulary {
   is_default: boolean;
   word_count?: number;
   story_id?: string | null; // Added to hold potential story ID
+  cover_image_url?: string; // Optional field for cover image URL
 }
 
 interface VocabularyListProps {
   onSelectVocabulary: (vocabulary: Vocabulary) => void; // Vocabulary type here will be the enhanced one
   onCreateNew: () => void;
   onEditVocabulary?: (vocabulary: Vocabulary) => void;
-  onPlayStory: (vocabularyId: string, vocabularyTitle: string, storyId?: string) => void; // Added prop
+  onPlayStory: (
+    vocabularyId: string,
+    vocabularyTitle: string,
+    storyId?: string,
+    vocabularyCoverImageUrl?: string // Optional: can be used if needed
+  ) => void; // Added prop
 }
 
 const VocabularyList = ({
@@ -74,14 +80,11 @@ const VocabularyList = ({
     React.useState<Vocabulary | null>(null);
   // const [isGeneratingStory, setIsGeneratingStory] = React.useState<string | null>(null); // No longer needed here
 
-
   const { data: vocabularies = [], isLoading } = useQuery<Vocabulary[]>({
     queryKey: ["vocabulariesWithStories"], // Changed queryKey to reflect new data
     queryFn: async () => {
       // Fetch vocabularies and their first story_id if available
-      const { data, error } = await supabase
-        .from("vocabularies")
-        .select(`
+      const { data, error } = await supabase.from("vocabularies").select(`
           *,
           vocabulary_words(count),
           stories(id)
@@ -99,8 +102,6 @@ const VocabularyList = ({
       }));
     },
   });
-  // console.log("Fetched vocabularies with stories:", vocabularies);
-
   const { data: userProgress = [] } = useQuery({
     queryKey: ["user-progress-all"],
     queryFn: async () => {
@@ -156,8 +157,6 @@ const VocabularyList = ({
 
   const deleteVocabularyMutation = useMutation({
     mutationFn: async (vocabularyId: string) => {
-      console.log("Deleting vocabulary:", vocabularyId);
-
       // Delete user progress first
       const { error: progressError } = await supabase
         .from("user_progress")
@@ -227,13 +226,6 @@ const VocabularyList = ({
     mutationFn: async (vocabularyId: string) => {
       if (!user) throw new Error("User not authenticated");
 
-      console.log(
-        "Resetting progress for vocabulary:",
-        vocabularyId,
-        "user:",
-        user.id
-      );
-
       // Delete user progress for this vocabulary
       const { error: progressError } = await supabase
         .from("user_progress")
@@ -279,34 +271,29 @@ const VocabularyList = ({
   });
 
   const handleEdit = (vocabulary: Vocabulary) => {
-    console.log("Edit vocabulary:", vocabulary);
     if (onEditVocabulary) {
       onEditVocabulary(vocabulary);
     }
   };
 
   const handleDelete = (vocabulary: Vocabulary) => {
-    console.log("Delete vocabulary requested:", vocabulary);
     setSelectedVocabulary(vocabulary);
     setDeleteDialogOpen(true);
   };
 
   const handleResetProgress = (vocabulary: Vocabulary) => {
-    console.log("Reset progress requested:", vocabulary);
     setSelectedVocabulary(vocabulary);
     setResetDialogOpen(true);
   };
 
   const confirmDelete = () => {
     if (selectedVocabulary) {
-      console.log("Confirming delete for:", selectedVocabulary);
       deleteVocabularyMutation.mutate(selectedVocabulary.id);
     }
   };
 
   const confirmResetProgress = () => {
     if (selectedVocabulary) {
-      console.log("Confirming reset progress for:", selectedVocabulary);
       try {
         resetProgressMutation.mutate(selectedVocabulary.id);
       } catch (e) {
@@ -319,19 +306,28 @@ const VocabularyList = ({
 
   const handlePlayStoryClick = (vocabulary: Vocabulary) => {
     if (vocabulary.story_id) {
-      onPlayStory(vocabulary.id, vocabulary.title, vocabulary.story_id);
+      // Call the onPlayStory prop with the necessary
+      onPlayStory(
+        vocabulary.id,
+        vocabulary.title,
+        vocabulary.story_id,
+        vocabulary.cover_image_url
+      );
     } else {
       // This case should ideally not happen if button is only shown when story_id exists.
       // However, as a fallback or if there's a UI delay:
       toast({
         title: "Story Not Available",
-        description: "This vocabulary does not have a story yet. Please create one first.",
+        description:
+          "This vocabulary does not have a story yet. Please create one first.",
         variant: "default", // Or "destructive" if it's considered an error state
       });
-      console.warn("Play Story clicked for vocabulary without a story_id:", vocabulary.title);
+      console.warn(
+        "Play Story clicked for vocabulary without a story_id:",
+        vocabulary.title
+      );
     }
   };
-
 
   if (isLoading) {
     return (
@@ -354,6 +350,7 @@ const VocabularyList = ({
 
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {vocabularies.map((vocabulary) => {
+            const backgroundImage = vocabulary.cover_image_url;
             const progress = getVocabularyProgress(
               vocabulary.id,
               vocabulary.word_count || 0
@@ -364,9 +361,16 @@ const VocabularyList = ({
             return (
               <Card
                 key={vocabulary.id}
-                className={`transition-shadow ${ // Removed hover:shadow-lg
+                className={`transition-shadow ${
                   isCompleted ? "ring-2 ring-green-200 bg-green-50" : ""
                 }`}
+                style={{
+                  backgroundImage: `url(${backgroundImage})`,
+                  backgroundSize: "cover",
+                  backgroundPosition: "center",
+                  backgroundColor: "rgba(255, 255, 255, 0.85)", // Add pale overlay
+                  backgroundBlendMode: "overlay", // Ensure the pale effect applies only to the background
+                }}
               >
                 <CardHeader>
                   <div className="flex justify-between items-start">

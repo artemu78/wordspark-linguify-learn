@@ -1,25 +1,27 @@
+import React, { useState } from "react";
+import { useAuth } from "@/contexts/AuthContext";
+import Header from "@/components/Header";
+import VocabularyList from "@/components/VocabularyList";
+import LearningInterface from "@/components/LearningInterface";
+import CreateVocabulary from "@/components/CreateVocabulary";
+import EditVocabulary from "@/components/EditVocabulary";
+import PlayStoryInterface from "@/components/PlayStoryInterface"; // Added
 
-import React, { useState } from 'react';
-import { useAuth } from '@/contexts/AuthContext';
-import Header from '@/components/Header';
-import VocabularyList from '@/components/VocabularyList';
-import LearningInterface from '@/components/LearningInterface';
-import CreateVocabulary from '@/components/CreateVocabulary';
-import EditVocabulary from '@/components/EditVocabulary';
-import PlayStoryInterface from '@/components/PlayStoryInterface'; // Added
+type View = "list" | "learn" | "create" | "edit" | "playStory"; // Added 'playStory'
 
-type View = 'list' | 'learn' | 'create' | 'edit' | 'playStory'; // Added 'playStory'
-
-interface SelectedVocabularyInfo { // Renamed for clarity
+interface SelectedVocabularyInfo {
+  // Renamed for clarity
   id: string; // This can be vocabularyId
   title: string; // This can be vocabularyTitle
   storyId?: string; // Optional: storyId if navigating to playStory
+  vocabularyCoverImageUrl?: string; // Optional: cover image URL for learning interface
 }
 
 const Dashboard = () => {
   const { loading } = useAuth();
-  const [currentView, setCurrentView] = useState<View>('list');
-  const [selectedInfo, setSelectedInfo] = useState<SelectedVocabularyInfo | null>(null); // Renamed state
+  const [currentView, setCurrentView] = useState<View>("list");
+  const [selectedInfo, setSelectedInfo] =
+    useState<SelectedVocabularyInfo | null>(null); // Renamed state
 
   if (loading) {
     return (
@@ -29,79 +31,110 @@ const Dashboard = () => {
     );
   }
 
-  const handleSelectVocabulary = (vocabulary: { id: string, title: string }) => {
-    setSelectedInfo({ id: vocabulary.id, title: vocabulary.title });
-    setCurrentView('learn');
+  const handleSelectVocabulary = (vocabulary: {
+    id: string;
+    title: string;
+    cover_image_url?: string; // Optional: cover image URL
+  }) => {
+    setSelectedInfo({
+      id: vocabulary.id,
+      title: vocabulary.title,
+      vocabularyCoverImageUrl: vocabulary.cover_image_url || "",
+    });
+    setCurrentView("learn");
   };
 
   const handleCreateNew = () => {
-    setCurrentView('create');
+    setCurrentView("create");
     setSelectedInfo(null); // Clear selection when going to create
   };
 
-  const handleEditVocabulary = (vocabulary: { id: string, title: string }) => {
-    setSelectedInfo({ id: vocabulary.id, title: vocabulary.title });
-    setCurrentView('edit');
+  const handleEditVocabulary = (vocabulary: {
+    id: string;
+    title: string;
+    cover_image_url: string;
+  }) => {
+    setSelectedInfo({
+      id: vocabulary.id,
+      title: vocabulary.title,
+      vocabularyCoverImageUrl: vocabulary.cover_image_url || "",
+    });
+    setCurrentView("edit");
   };
 
-  const handlePlayStory = (vocabularyId: string, vocabularyTitle: string, storyId?: string) => {
+  const handlePlayStory = (
+    vocabularyId: string,
+    vocabularyTitle: string,
+    storyId?: string,
+    vocabularyCoverImageUrl?: string // Optional: can be used if needed
+  ) => {
     if (!storyId) {
       // This case should ideally be handled by VocabularyList generating a story first
       // or showing an error if generation fails.
-      console.warn("handlePlayStory called without a storyId. This might indicate an issue.");
+      console.warn(
+        "handlePlayStory called without a storyId. This might indicate an issue."
+      );
       // Optionally, navigate back or show a message
       // setCurrentView('list');
       return;
     }
-    setSelectedInfo({ id: vocabularyId, title: vocabularyTitle, storyId: storyId });
-    setCurrentView('playStory');
+    setSelectedInfo({
+      id: vocabularyId,
+      title: vocabularyTitle,
+      storyId: storyId,
+      vocabularyCoverImageUrl,
+    });
+    setCurrentView("playStory");
   };
 
   const handleBackToList = () => {
-    setCurrentView('list');
+    setCurrentView("list");
     setSelectedInfo(null);
   };
 
   return (
     <div className="min-h-screen bg-gray-50">
       <Header />
-      
+
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {currentView === 'list' && (
-          <VocabularyList 
+        {currentView === "list" && (
+          <VocabularyList
             onSelectVocabulary={handleSelectVocabulary}
             onCreateNew={handleCreateNew}
             onEditVocabulary={handleEditVocabulary}
             onPlayStory={handlePlayStory} // Pass the new handler
           />
         )}
-        
-        {currentView === 'learn' && selectedInfo && (
+
+        {currentView === "learn" && selectedInfo && (
           <LearningInterface
             vocabularyId={selectedInfo.id}
             vocabularyTitle={selectedInfo.title}
+            vocabularyCoverImageUrl={selectedInfo.vocabularyCoverImageUrl}
             onBack={handleBackToList}
           />
         )}
-        
-        {currentView === 'create' && (
+
+        {currentView === "create" && (
           <CreateVocabulary onBack={handleBackToList} />
         )}
 
-        {currentView === 'edit' && selectedInfo && (
-          <EditVocabulary 
+        {currentView === "edit" && selectedInfo && (
+          <EditVocabulary
             vocabularyId={selectedInfo.id}
             onBack={handleBackToList}
           />
         )}
 
-        {currentView === 'playStory' && selectedInfo && selectedInfo.storyId && (
-          <PlayStoryInterface
-            storyId={selectedInfo.storyId}
-            vocabularyTitle={selectedInfo.title}
-            onBack={handleBackToList}
-          />
-        )}
+        {currentView === "playStory" &&
+          selectedInfo &&
+          selectedInfo.storyId && (
+            <PlayStoryInterface
+              storyId={selectedInfo.storyId}
+              vocabularyTitle={selectedInfo.title}
+              onBack={handleBackToList}
+            />
+          )}
       </main>
     </div>
   );

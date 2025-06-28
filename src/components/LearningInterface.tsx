@@ -19,6 +19,7 @@ interface VocabularyWord {
 interface LearningInterfaceProps {
   vocabularyId: string;
   vocabularyTitle: string;
+  vocabularyCoverImageUrl?: string; // Optional: cover image URL for learning interface
   onBack: () => void;
 }
 
@@ -31,6 +32,7 @@ interface ChoiceOption {
 const LearningInterface = ({
   vocabularyId,
   vocabularyTitle,
+  vocabularyCoverImageUrl,
   onBack,
 }: LearningInterfaceProps) => {
   const { user } = useAuth();
@@ -95,7 +97,7 @@ const LearningInterface = ({
       if (!user) throw new Error("User not authenticated");
 
       const existingProgress = progress.find((p) => p.word_id === wordId);
-      let newProgressData: any = {
+      const newProgressData: any = {
         attempts: (existingProgress?.attempts || 0) + 1,
         last_attempted: new Date().toISOString(),
       };
@@ -116,7 +118,9 @@ const LearningInterface = ({
           ? isCorrectAttempt
           : existingProgress?.typing_correct;
 
-      newProgressData.is_correct = !!(currentChoiceCorrect && currentTypingCorrect);
+      newProgressData.is_correct = !!(
+        currentChoiceCorrect && currentTypingCorrect
+      );
 
       if (existingProgress) {
         const { error } = await supabase
@@ -131,8 +135,14 @@ const LearningInterface = ({
           word_id: wordId,
           ...newProgressData,
           // Ensure initial values for the other challenge type if not set
-          choice_correct: newProgressData.choice_correct !== undefined ? newProgressData.choice_correct : false,
-          typing_correct: newProgressData.typing_correct !== undefined ? newProgressData.typing_correct : false,
+          choice_correct:
+            newProgressData.choice_correct !== undefined
+              ? newProgressData.choice_correct
+              : false,
+          typing_correct:
+            newProgressData.typing_correct !== undefined
+              ? newProgressData.typing_correct
+              : false,
           is_correct: newProgressData.is_correct, // Already calculated
         });
         if (error) throw error;
@@ -161,9 +171,9 @@ const LearningInterface = ({
 
   const currentWord = words[currentIndex];
 
-  const fullyCompletedCount = progress.filter(p => p.is_correct).length;
-  const progressPercentage = words.length > 0 ? (fullyCompletedCount / words.length) * 100 : 0;
-
+  const fullyCompletedCount = progress.filter((p) => p.is_correct).length;
+  const progressPercentage =
+    words.length > 0 ? (fullyCompletedCount / words.length) * 100 : 0;
 
   // Logic to decide challenge type and prepare for it
   useEffect(() => {
@@ -180,27 +190,39 @@ const LearningInterface = ({
       if (!choiceDone) {
         newType = "choice";
         // Only generate choices if the type is actually changing to 'choice' or word changed
-        if (challengeType !== "choice" || currentWord.id !== previousDisplayWordForRef.current) {
-            if (words.length >= 4) generateChoices();
-            setDisplayWord("");
+        if (
+          challengeType !== "choice" ||
+          currentWord.id !== previousDisplayWordForRef.current
+        ) {
+          if (words.length >= 4) generateChoices();
+          setDisplayWord("");
         }
       } else if (!typingDone) {
         newType = "typing";
-         // Only update display word if the type is actually changing to 'typing' or word changed
-        if (challengeType !== "typing" || currentWord.id !== previousDisplayWordForRef.current) {
-            setDisplayWord(generateDisplayWord(currentWord.translation));
-            setChoices([]);
+        // Only update display word if the type is actually changing to 'typing' or word changed
+        if (
+          challengeType !== "typing" ||
+          currentWord.id !== previousDisplayWordForRef.current
+        ) {
+          setDisplayWord(generateDisplayWord(currentWord.translation));
+          setChoices([]);
         }
       } else {
         // Word is fully done. handleNext will move. If we are here, it's likely after completion & restart.
         newType = "choice";
-        if (challengeType !== "choice" || currentWord.id !== previousDisplayWordForRef.current) {
-            if (words.length >= 4) generateChoices();
-             setDisplayWord("");
+        if (
+          challengeType !== "choice" ||
+          currentWord.id !== previousDisplayWordForRef.current
+        ) {
+          if (words.length >= 4) generateChoices();
+          setDisplayWord("");
         }
       }
 
-      if (previousChallengeType !== newType || currentWord.id !== previousDisplayWordForRef.current) {
+      if (
+        previousChallengeType !== newType ||
+        currentWord.id !== previousDisplayWordForRef.current
+      ) {
         setChallengeType(newType); // Set the new type
         setShowResult(false);
         setTypedAnswer("");
@@ -221,7 +243,6 @@ const LearningInterface = ({
   useEffect(() => {
     challengeTypeRef.current = challengeType;
   }, [challengeType]);
-
 
   const generateChoices = () => {
     if (!currentWord || words.length < 4) return;
@@ -255,7 +276,7 @@ const LearningInterface = ({
   const generateDisplayWord = (word: string) => {
     const length = word.length;
     const halfLength = Math.ceil(length / 2);
-    let indicesToHide = new Set<number>();
+    const indicesToHide = new Set<number>();
     while (indicesToHide.size < halfLength) {
       indicesToHide.add(Math.floor(Math.random() * length));
     }
@@ -318,7 +339,8 @@ const LearningInterface = ({
 
     // Try to find the next word that is not fully completed (is_correct is false)
     // Start searching from the word *after* the current one.
-    for (let i = 1; i <= words.length; i++) { // Iterate through all words once, starting from next
+    for (let i = 1; i <= words.length; i++) {
+      // Iterate through all words once, starting from next
       const nextPotentialWordIndex = (currentIndex + i) % words.length;
       const word = words[nextPotentialWordIndex];
       const wordProgress = progress.find((p) => p.word_id === word.id);
@@ -332,8 +354,8 @@ const LearningInterface = ({
     // If the loop completes, it means all words are is_correct: true
     // Or there's only one word and it's now complete.
     // Check for overall completion.
-    const allFullyCompleted = words.every(word => {
-      const p = progress.find(pr => pr.word_id === word.id);
+    const allFullyCompleted = words.every((word) => {
+      const p = progress.find((pr) => pr.word_id === word.id);
       return p && p.is_correct;
     });
 
@@ -351,7 +373,7 @@ const LearningInterface = ({
     setSelectedChoice(null);
     setShowResult(false);
     setTypedAnswer(""); // Clear typed answer on retry
-    if (challengeType === "choice" && words.length >=4) {
+    if (challengeType === "choice" && words.length >= 4) {
       generateChoices();
     } else if (challengeType === "typing" && currentWord) {
       // Optionally regenerate display word if it should change on retry, or keep it same
@@ -468,7 +490,15 @@ const LearningInterface = ({
         </Badge>
       </div>
 
-      <Card>
+      <Card
+        style={{
+          backgroundImage: `url(${vocabularyCoverImageUrl})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundColor: "rgba(255, 255, 255, 0.85)", // Add pale overlay
+          backgroundBlendMode: "overlay", // Ensure the pale effect applies only to the background
+        }}
+      >
         <CardHeader>
           <CardTitle className="text-center">{vocabularyTitle}</CardTitle>
           <Progress value={progressPercentage} className="w-full" />
@@ -525,7 +555,8 @@ const LearningInterface = ({
                   </Card>
                 ))}
               </div>
-            ) : ( // Typing challenge UI
+            ) : (
+              // Typing challenge UI
               <div className="space-y-4 flex flex-col items-center">
                 <input
                   type="text"
@@ -533,9 +564,12 @@ const LearningInterface = ({
                   onChange={(e) => setTypedAnswer(e.target.value)}
                   placeholder="Type the translation"
                   className="input input-bordered w-full max-w-md p-3 border-gray-300 rounded-md shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
-                  onKeyPress={(e) => e.key === 'Enter' && handleTypingSubmit()}
+                  onKeyPress={(e) => e.key === "Enter" && handleTypingSubmit()}
                 />
-                <Button onClick={handleTypingSubmit} className="max-w-md w-full">
+                <Button
+                  onClick={handleTypingSubmit}
+                  className="max-w-md w-full"
+                >
                   Submit Answer
                 </Button>
               </div>
