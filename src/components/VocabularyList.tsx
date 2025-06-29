@@ -81,14 +81,22 @@ const VocabularyList = ({
   // const [isGeneratingStory, setIsGeneratingStory] = React.useState<string | null>(null); // No longer needed here
 
   const { data: vocabularies = [], isLoading } = useQuery<Vocabulary[]>({
-    queryKey: ["vocabulariesWithStories"], // Changed queryKey to reflect new data
+    queryKey: ["vocabulariesWithStories", user?.id], // Include user ID in queryKey
     queryFn: async () => {
+      if (!user) return []; // Or handle appropriately if user is required
+
       // Fetch vocabularies and their first story_id if available
-      const { data, error } = await supabase.from("vocabularies").select(`
+      // Also filter by is_public or created_by
+      const { data, error } = await supabase
+        .from("vocabularies")
+        .select(
+          `
           *,
           vocabulary_words(count),
           stories(id)
-        `);
+        `
+        )
+        .or(`is_public.eq.true,created_by.eq.${user.id}`); // Added filter condition
 
       if (error) {
         console.error("Error fetching vocabularies with stories:", error);
@@ -101,6 +109,7 @@ const VocabularyList = ({
         story_id: vocab.stories?.[0]?.id || null, // Extract story_id
       }));
     },
+    enabled: !!user, // Ensure user is loaded before fetching
   });
   const { data: userProgress = [] } = useQuery({
     queryKey: ["user-progress-all"],

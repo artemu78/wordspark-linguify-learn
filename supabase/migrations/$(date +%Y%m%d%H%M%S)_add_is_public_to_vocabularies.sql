@@ -1,0 +1,2 @@
+ALTER TABLE vocabularies
+ADD COLUMN is_public BOOLEAN DEFAULT FALSE;

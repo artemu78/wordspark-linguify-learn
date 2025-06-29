@@ -17,6 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ArrowLeft, Plus, Trash2, Sparkles, BookPlus } from "lucide-react"; // Added BookPlus
+import { Switch } from "@/components/ui/switch"; // Added Switch
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -45,6 +46,7 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
   const [topic, setTopic] = useState("");
   const [sourceLanguage, setSourceLanguage] = useState("en");
   const [targetLanguage, setTargetLanguage] = useState("es");
+  const [isPublic, setIsPublic] = useState(false); // Added isPublic state
   const [wordPairs, setWordPairs] = useState<WordPair[]>([]);
   const [aiWordCount, setAiWordCount] = useState(10);
   const [storyId, setStoryId] = useState<string | null>(null);
@@ -92,6 +94,7 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
       setTopic(vocabularyData.topic);
       setSourceLanguage(vocabularyData.source_language);
       setTargetLanguage(vocabularyData.target_language);
+      setIsPublic(vocabularyData.is_public || false); // Set isPublic from fetched data
       setStoryId(vocabularyData.stories?.[0]?.id || null);
     }
   }, [vocabularyData]);
@@ -167,6 +170,7 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
           target_language: targetLanguage,
           updated_at: new Date().toISOString(),
           cover_image_url: vocabularyImageUrl, // Use the image URL if available
+          is_public: isPublic, // Added is_public field
         })
         .eq("id", vocabularyId)
         .eq("created_by", user.id); // Ensure user owns this vocabulary
@@ -404,6 +408,20 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                     updateVocabularyMutation.isPending || isCreatingStory
                   }
                 />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="is-public"
+                  checked={isPublic}
+                  onCheckedChange={setIsPublic}
+                  disabled={
+                    updateVocabularyMutation.isPending || isCreatingStory
+                  }
+                />
+                <Label htmlFor="is-public">Make vocabulary public</Label>
               </div>
             </div>
 
