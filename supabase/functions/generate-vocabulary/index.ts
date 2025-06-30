@@ -67,7 +67,12 @@ async function generateVocabularyImage(
 
   const imagenData = await imagenResponse.json();
   if (!imagenData || !imagenData.predictions || !imagenData.predictions[0]) {
-    throw new Error("Invalid response from Imagen API");
+    throw new Error(
+      "Invalid response from Imagen API: " +
+        imagenResponse.statusText +
+        "\n" +
+        JSON.stringify(imagenData, null, 2)
+    );
   }
   let imageContent;
   try {

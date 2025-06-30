@@ -11,14 +11,22 @@ const jsonResponse = (data: any, status: number = 200) => {
     headers: {
       "Content-Type": "application/json",
       "Access-Control-Allow-Origin": "*", // Or your specific client domain
-      "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+      "Access-Control-Allow-Headers":
+        "authorization, x-client-info, apikey, content-type",
     },
   });
 };
 
 // Helper function to return error response
-const errorResponse = (message: string, status: number = 500, details?: any) => {
-  console.error(`[EdgeFunctionError] Status: ${status}, Message: ${message}`, details);
+const errorResponse = (
+  message: string,
+  status: number = 500,
+  details?: any
+) => {
+  console.error(
+    `[EdgeFunctionError] Status: ${status}, Message: ${message}`,
+    details
+  );
   return jsonResponse({ error: message, details }, status);
 };
 
@@ -41,7 +49,8 @@ Deno.serve(async (req: Request) => {
       headers: {
         "Access-Control-Allow-Origin": "*", // Or your specific client domain
         "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+        "Access-Control-Allow-Headers":
+          "authorization, x-client-info, apikey, content-type",
       },
     });
   }
@@ -57,25 +66,35 @@ Deno.serve(async (req: Request) => {
     return errorResponse("Invalid JSON payload.", 400, e.message);
   }
 
-  const {
-    words,
-    vocabularyTitle,
-    sourceLanguage,
-    targetLanguage,
-  } = payload;
+  const { words, vocabularyTitle, sourceLanguage, targetLanguage } = payload;
 
-  if (!Array.isArray(words) || words.length === 0 || !vocabularyTitle || !sourceLanguage || !targetLanguage) {
-    return errorResponse("Missing required fields in payload: words, vocabularyTitle, sourceLanguage, targetLanguage.", 400);
+  if (
+    !Array.isArray(words) ||
+    words.length === 0 ||
+    !vocabularyTitle ||
+    !sourceLanguage ||
+    !targetLanguage
+  ) {
+    return errorResponse(
+      "Missing required fields in payload: words, vocabularyTitle, sourceLanguage, targetLanguage.",
+      400
+    );
   }
 
   const apiKey = Deno.env.get("GEMINI_API_KEY");
   if (!apiKey) {
-    return errorResponse("GEMINI_API_KEY is not set in environment variables.", 500, "API_KEY_MISSING");
+    return errorResponse(
+      "GEMINI_API_KEY is not set in environment variables.",
+      500,
+      "API_KEY_MISSING"
+    );
   }
 
   try {
     const genAI = new GoogleGenerativeAI(apiKey);
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash-latest" });
+    const model = genAI.getGenerativeModel({
+      model: "gemini-2.5-flash",
+    });
 
     const generationConfig = {
       temperature: 0.7,
@@ -86,10 +105,22 @@ Deno.serve(async (req: Request) => {
     };
 
     const safetySettings = [
-      { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-      { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-      { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
-      { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE },
+      {
+        category: HarmCategory.HARM_CATEGORY_HARASSMENT,
+        threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_HATE_SPEECH,
+        threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT,
+        threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+      },
+      {
+        category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT,
+        threshold: HarmBlockThreshold.BLOCK_MEDIUM_AND_ABOVE,
+      },
     ];
 
     const wordList = words.map((w: WordDetail) => w.word).join(", ");
@@ -131,22 +162,38 @@ Deno.serve(async (req: Request) => {
     const responseText = response.text();
 
     if (!responseText) {
-      return errorResponse("Received an empty response from Gemini API.", 500, "GEMINI_EMPTY_RESPONSE");
+      return errorResponse(
+        "Received an empty response from Gemini API.",
+        500,
+        "GEMINI_EMPTY_RESPONSE"
+      );
     }
 
     let parsedResponse: GeminiStoryBit[];
     try {
       parsedResponse = JSON.parse(responseText);
     } catch (parseError: any) {
-      console.error("Failed to parse Gemini response in Edge Function:", parseError);
+      console.error(
+        "Failed to parse Gemini response in Edge Function:",
+        parseError
+      );
       return errorResponse(
-        `Failed to parse JSON response from Gemini. Raw response snippet: ${responseText.substring(0, 200)}...`,
+        `Failed to parse JSON response from Gemini. Raw response snippet: ${responseText.substring(
+          0,
+          200
+        )}...`,
         500,
-        { error: parseError.message, response: responseText.substring(0, 200) + "..." }
+        {
+          error: parseError.message,
+          response: responseText.substring(0, 200) + "...",
+        }
       );
     }
 
-    if (!Array.isArray(parsedResponse) || parsedResponse.length !== words.length) {
+    if (
+      !Array.isArray(parsedResponse) ||
+      parsedResponse.length !== words.length
+    ) {
       return errorResponse(
         `Gemini response is not a valid array or does not match the expected number of story bits. Expected ${words.length}, got ${parsedResponse.length}.`,
         500,
@@ -157,15 +204,19 @@ Deno.serve(async (req: Request) => {
       if (!bit.word || !bit.storyBitDescription || !bit.imagePrompt) {
         // This error will be caught by the main try-catch and returned as a 500
         throw new Error(
-          `Gemini response bit ${index} is missing required fields. Bit: ${JSON.stringify(bit)}`
+          `Gemini response bit ${index} is missing required fields. Bit: ${JSON.stringify(
+            bit
+          )}`
         );
       }
     });
 
     return jsonResponse(parsedResponse);
-
   } catch (error: any) {
-    console.error("Error in Supabase Edge Function 'generate-story-with-gemini':", error);
+    console.error(
+      "Error in Supabase Edge Function 'generate-story-with-gemini':",
+      error
+    );
     // Check for specific Gemini API error structures if available from SDK
     // For example, error.response?.promptFeedback might contain safety-related blocks
     if (error.message?.includes("SAFETY")) {
