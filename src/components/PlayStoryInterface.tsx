@@ -190,9 +190,18 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
                     </span>
                   )}
                 </p>
-                <p className="text-lg text-gray-700 leading-relaxed">
+                <p className="text-lg text-gray-700 leading-relaxed mb-2"> {/* mb-2 to add space before the next language bit */}
                   {renderDescriptionWithBoldWord(currentBit.sentence, currentBit.word)}
                 </p>
+                {currentBit.sentence_language_you_know && (
+                  <div className="mt-4 pt-4 border-t border-gray-200">
+                    <p className="text-sm text-gray-500 mb-1">In language you know:</p> {/* Simple label */}
+                    <p className="text-md text-gray-600 leading-relaxed">
+                      {/* We might not need to bold the word here, or use its translation if available */}
+                      {renderDescriptionWithBoldWord(currentBit.sentence_language_you_know, currentBit.word)}
+                    </p>
+                  </div>
+                )}
               </div>
             </div>
           )}
