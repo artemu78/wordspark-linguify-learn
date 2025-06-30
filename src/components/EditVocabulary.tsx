@@ -16,10 +16,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Plus, Trash2, Sparkles, BookPlus } from "lucide-react"; // Added BookPlus
+import { ArrowLeft, Plus, Trash2, Sparkles, BookPlus, Loader2 } from "lucide-react"; // Added BookPlus, Loader2
 import { Switch } from "@/components/ui/switch"; // Added Switch
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
+import { useLanguageStore } from "@/stores/languageStore"; // Import the language store
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { generateAndSaveStory, StoryGenerationError } from "@/lib/storyUtils"; // Added
@@ -51,6 +52,21 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
   const [aiWordCount, setAiWordCount] = useState(10);
   const [storyId, setStoryId] = useState<string | null>(null);
   const [isCreatingStory, setIsCreatingStory] = useState(false);
+
+  // Language store integration
+  const {
+    languages,
+    loading: languagesLoading,
+    error: languagesError,
+    fetchLanguages,
+    hasFetched: languagesHasFetched,
+  } = useLanguageStore();
+
+  useEffect(() => {
+    if (!languagesHasFetched) {
+      fetchLanguages();
+    }
+  }, [fetchLanguages, languagesHasFetched]);
 
   // Fetch vocabulary details including story
   const { data: vocabularyData, isLoading: isLoadingVocabulary } = useQuery({
@@ -432,19 +448,26 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                   value={sourceLanguage}
                   onValueChange={setSourceLanguage}
                   disabled={
-                    updateVocabularyMutation.isPending || isCreatingStory
+                      updateVocabularyMutation.isPending || isCreatingStory || languagesLoading
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                      {languagesLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : (
+                        <SelectValue placeholder="Select target language" />
+                      )}
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="en">English</SelectItem>
-                    <SelectItem value="es">Spanish</SelectItem>
-                    <SelectItem value="fr">French</SelectItem>
-                    <SelectItem value="de">German</SelectItem>
-                    <SelectItem value="it">Italian</SelectItem>
-                    <SelectItem value="tr">Turkish</SelectItem>
+                      {languagesError && <SelectItem value="error" disabled>{languagesError}</SelectItem>}
+                      {!languagesLoading && !languagesError && languages.length === 0 && (
+                        <SelectItem value="no-langs" disabled>No languages available</SelectItem>
+                      )}
+                      {languages.map((lang) => (
+                        <SelectItem key={lang.code} value={lang.code}>
+                          {lang.name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -454,19 +477,26 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                   value={targetLanguage}
                   onValueChange={setTargetLanguage}
                   disabled={
-                    updateVocabularyMutation.isPending || isCreatingStory
+                      updateVocabularyMutation.isPending || isCreatingStory || languagesLoading
                   }
                 >
                   <SelectTrigger>
-                    <SelectValue />
+                      {languagesLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : (
+                        <SelectValue placeholder="Select source language" />
+                      )}
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="en">English</SelectItem>
-                    <SelectItem value="es">Spanish</SelectItem>
-                    <SelectItem value="fr">French</SelectItem>
-                    <SelectItem value="de">German</SelectItem>
-                    <SelectItem value="it">Italian</SelectItem>
-                    <SelectItem value="tr">Turkish</SelectItem>
+                       {languagesError && <SelectItem value="error" disabled>{languagesError}</SelectItem>}
+                       {!languagesLoading && !languagesError && languages.length === 0 && (
+                        <SelectItem value="no-langs" disabled>No languages available</SelectItem>
+                       )}
+                       {languages.map((lang) => (
+                        <SelectItem key={lang.code} value={lang.code}>
+                          {lang.name}
+                        </SelectItem>
+                       ))}
                   </SelectContent>
                 </Select>
               </div>

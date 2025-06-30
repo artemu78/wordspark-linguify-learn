@@ -10,11 +10,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Plus, Trash2, Sparkles, BookPlus } from "lucide-react"; // Added BookPlus
+import { ArrowLeft, Plus, Trash2, Sparkles, BookPlus, Loader2 } from "lucide-react"; // Added BookPlus, Loader2
 import { Switch } from "@/components/ui/switch"; // Added Switch
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
+import { useLanguageStore } from "@/stores/languageStore"; // Import the language store
+import { useEffect } from "react"; // Import useEffect
 import { useToast } from "@/hooks/use-toast";
 import { generateAndSaveStory, StoryGenerationError } from "@/lib/storyUtils"; // Added
 
@@ -44,6 +46,34 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
   const [wordPairs, setWordPairs] = useState<WordPair[]>([
     { word: "", translation: "" },
   ]);
+
+  // Language store integration
+  const {
+    languages,
+    loading: languagesLoading,
+    error: languagesError,
+    fetchLanguages,
+    hasFetched: languagesHasFetched,
+  } = useLanguageStore();
+
+  useEffect(() => {
+    if (!languagesHasFetched) {
+      fetchLanguages();
+    }
+  }, [fetchLanguages, languagesHasFetched]);
+
+  // Set default languages once fetched and not yet set by user
+  useEffect(() => {
+    if (languages.length > 0 && sourceLanguage === "en" && targetLanguage === "es") {
+      // Basic default, consider if user has already changed them
+      // This logic might need refinement if we want to preserve user's initial non-default choices
+      // before languages are loaded. For now, it sets if current state is the initial default.
+      const defaultSource = languages.find(lang => lang.code === "en");
+      const defaultTarget = languages.find(lang => lang.code === "es");
+      if (defaultSource) setSourceLanguage(defaultSource.code);
+      if (defaultTarget) setTargetLanguage(defaultTarget.code);
+    }
+  }, [languages, sourceLanguage, targetLanguage]);
   const [aiWordCount, setAiWordCount] = useState(10);
   const [createdVocabularyId, setCreatedVocabularyId] = useState<string | null>(
     null
@@ -334,18 +364,25 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
                   <Select
                     value={sourceLanguage}
                     onValueChange={setSourceLanguage}
-                    disabled={createVocabularyMutation.isPending}
+                    disabled={createVocabularyMutation.isPending || languagesLoading}
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      {languagesLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : (
+                        <SelectValue placeholder="Select source language" />
+                      )}
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="en">English</SelectItem>
-                      <SelectItem value="es">Spanish</SelectItem>
-                      <SelectItem value="fr">French</SelectItem>
-                      <SelectItem value="de">German</SelectItem>
-                      <SelectItem value="it">Italian</SelectItem>
-                      <SelectItem value="tr">Turkish</SelectItem>
+                      {languagesError && <SelectItem value="error" disabled>{languagesError}</SelectItem>}
+                      {!languagesLoading && !languagesError && languages.length === 0 && (
+                        <SelectItem value="no-langs" disabled>No languages available</SelectItem>
+                      )}
+                      {languages.map((lang) => (
+                        <SelectItem key={lang.code} value={lang.code}>
+                          {lang.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
@@ -354,18 +391,25 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
                   <Select
                     value={targetLanguage}
                     onValueChange={setTargetLanguage}
-                    disabled={createVocabularyMutation.isPending}
+                    disabled={createVocabularyMutation.isPending || languagesLoading}
                   >
                     <SelectTrigger>
-                      <SelectValue />
+                      {languagesLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : (
+                        <SelectValue placeholder="Select target language" />
+                      )}
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="en">English</SelectItem>
-                      <SelectItem value="es">Spanish</SelectItem>
-                      <SelectItem value="fr">French</SelectItem>
-                      <SelectItem value="de">German</SelectItem>
-                      <SelectItem value="it">Italian</SelectItem>
-                      <SelectItem value="tr">Turkish</SelectItem>
+                      {languagesError && <SelectItem value="error" disabled>{languagesError}</SelectItem>}
+                      {!languagesLoading && !languagesError && languages.length === 0 && (
+                         <SelectItem value="no-langs" disabled>No languages available</SelectItem>
+                      )}
+                      {languages.map((lang) => (
+                        <SelectItem key={lang.code} value={lang.code}>
+                          {lang.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
