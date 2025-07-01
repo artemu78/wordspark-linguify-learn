@@ -40,8 +40,8 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
   );
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
-  const [sourceLanguage, setSourceLanguage] = useState("en");
-  const [targetLanguage, setTargetLanguage] = useState("es");
+  const [languageYouKnow, setLanguageYouKnow] = useState("en"); // Renamed from sourceLanguage
+  const [languageToLearn, setLanguageToLearn] = useState("es"); // Renamed from targetLanguage
   const [isPublic, setIsPublic] = useState(false); // Added isPublic state
   const [wordPairs, setWordPairs] = useState<WordPair[]>([
     { word: "", translation: "" },
@@ -64,16 +64,16 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
 
   // Set default languages once fetched and not yet set by user
   useEffect(() => {
-    if (languages.length > 0 && sourceLanguage === "en" && targetLanguage === "es") {
+    if (languages.length > 0 && languageYouKnow === "en" && languageToLearn === "es") {
       // Basic default, consider if user has already changed them
       // This logic might need refinement if we want to preserve user's initial non-default choices
       // before languages are loaded. For now, it sets if current state is the initial default.
-      const defaultSource = languages.find(lang => lang.code === "en");
-      const defaultTarget = languages.find(lang => lang.code === "es");
-      if (defaultSource) setSourceLanguage(defaultSource.code);
-      if (defaultTarget) setTargetLanguage(defaultTarget.code);
+      const defaultLanguageYouKnow = languages.find(lang => lang.code === "en");
+      const defaultLanguageToLearn = languages.find(lang => lang.code === "es");
+      if (defaultLanguageYouKnow) setLanguageYouKnow(defaultLanguageYouKnow.code);
+      if (defaultLanguageToLearn) setLanguageToLearn(defaultLanguageToLearn.code);
     }
-  }, [languages, sourceLanguage, targetLanguage]);
+  }, [languages, languageYouKnow, languageToLearn]);
   const [aiWordCount, setAiWordCount] = useState(10);
   const [createdVocabularyId, setCreatedVocabularyId] = useState<string | null>(
     null
@@ -88,8 +88,8 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
         {
           body: {
             topic,
-            sourceLanguage,
-            targetLanguage,
+            languageYouKnow,
+            languageToLearn,
             wordCount: aiWordCount,
           },
         }
@@ -125,8 +125,8 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
         .insert({
           title,
           topic,
-          source_language: sourceLanguage,
-          target_language: targetLanguage,
+          source_language: languageYouKnow, // DB column name is still source_language
+          target_language: languageToLearn, // DB column name is still target_language
           created_by: user.id,
           cover_image_url: vocabularyImageUrl || null, // Use the image URL if available
           is_public: isPublic, // Added is_public field
@@ -360,17 +360,17 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label>Source Language</Label>
+                  <Label>Language you know</Label>
                   <Select
-                    value={sourceLanguage}
-                    onValueChange={setSourceLanguage}
+                    value={languageYouKnow}
+                    onValueChange={setLanguageYouKnow}
                     disabled={createVocabularyMutation.isPending || languagesLoading}
                   >
                     <SelectTrigger>
                       {languagesLoading ? (
                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
                       ) : (
-                        <SelectValue placeholder="Select source language" />
+                        <SelectValue placeholder="Select language you know" />
                       )}
                     </SelectTrigger>
                     <SelectContent>
@@ -387,17 +387,17 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Target Language</Label>
+                  <Label>Language to learn</Label>
                   <Select
-                    value={targetLanguage}
-                    onValueChange={setTargetLanguage}
+                    value={languageToLearn}
+                    onValueChange={setLanguageToLearn}
                     disabled={createVocabularyMutation.isPending || languagesLoading}
                   >
                     <SelectTrigger>
                       {languagesLoading ? (
                         <Loader2 className="h-4 w-4 animate-spin mr-2" />
                       ) : (
-                        <SelectValue placeholder="Select target language" />
+                        <SelectValue placeholder="Select language to learn" />
                       )}
                     </SelectTrigger>
                     <SelectContent>

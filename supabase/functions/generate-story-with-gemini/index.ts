@@ -37,7 +37,8 @@ interface WordDetail {
 
 interface GeminiStoryBit {
   word: string;
-  storyBitDescription: string;
+  storyBitDescription: string; // This will be in languageToLearn
+  storyBitDescriptionInLanguageYouKnow: string; // This will be in languageYouKnow
   imagePrompt: string;
 }
 
@@ -66,17 +67,17 @@ Deno.serve(async (req: Request) => {
     return errorResponse("Invalid JSON payload.", 400, e.message);
   }
 
-  const { words, vocabularyTitle, sourceLanguage, targetLanguage } = payload;
+  const { words, vocabularyTitle, languageYouKnow, languageToLearn } = payload;
 
   if (
     !Array.isArray(words) ||
     words.length === 0 ||
     !vocabularyTitle ||
-    !sourceLanguage ||
-    !targetLanguage
+    !languageYouKnow ||
+    !languageToLearn
   ) {
     return errorResponse(
-      "Missing required fields in payload: words, vocabularyTitle, sourceLanguage, targetLanguage.",
+      "Missing required fields in payload: words, vocabularyTitle, languageYouKnow, languageToLearn.",
       400
     );
   }
@@ -128,22 +129,24 @@ Deno.serve(async (req: Request) => {
     const prompt = `
       You are a creative storyteller for a language learning app.
       Your task is to create an engaging and coherent story using a specific list of words from a vocabulary titled "${vocabularyTitle}".
-      The story should be written in ${targetLanguage}.
-      The vocabulary words are in ${sourceLanguage}. The words are: ${wordList}.
+      The story is for a user learning ${languageToLearn}, and who knows ${languageYouKnow}.
+      The vocabulary words provided are in ${languageYouKnow}. The words are: ${wordList}.
 
       The story must be broken down into several "bits" or parts. Each bit must prominently feature one of the provided vocabulary words.
       The number of story bits must be exactly equal to the number of words provided (${words.length} words = ${words.length} bits).
       The story bits must flow logically and form a single, connected narrative.
 
       For each story bit, you must provide:
-      1.  "word": The specific vocabulary word (from the provided list in ${sourceLanguage}) that is central to this bit.
-      2.  "storyBitDescription": A short description of this part of the story (1-2 sentences) in ${targetLanguage}. This description should naturally incorporate or be about the specified "word".
-      3.  "imagePrompt": A detailed, captivating prompt (in English) for an AI image generator to create an illustration for this story bit. The prompt should describe a scene that visually represents the storyBitDescription. Maintain a consistent artistic style across all image prompts (e.g., "digital painting, vibrant colors, whimsical style" or "Studio Ghibli inspired anime style").
+      1.  "word": The specific vocabulary word (from the provided list, in ${languageYouKnow}) that is central to this bit.
+      2.  "storyBitDescription": A short description of this part of the story (1-2 sentences) IN ${languageToLearn}. This description should naturally incorporate or be about the specified "word".
+      3.  "storyBitDescriptionInLanguageYouKnow": The SAME story description, but translated accurately into ${languageYouKnow}.
+      4.  "imagePrompt": A detailed, captivating prompt (in English) for an AI image generator to create an illustration for this story bit. The prompt should describe a scene that visually represents the storyBitDescription (the ${languageToLearn} version). Maintain a consistent artistic style across all image prompts (e.g., "digital painting, vibrant colors, whimsical style" or "Studio Ghibli inspired anime style").
 
       The output MUST be a valid JSON array of objects, where each object represents a story bit and has the following structure:
       {
-        "word": "the ${sourceLanguage} word",
-        "storyBitDescription": "the story segment in ${targetLanguage}",
+        "word": "the ${languageYouKnow} word",
+        "storyBitDescription": "the story segment in ${languageToLearn}",
+        "storyBitDescriptionInLanguageYouKnow": "the story segment in ${languageYouKnow}",
         "imagePrompt": "the detailed image prompt in English"
       }
 
@@ -201,10 +204,15 @@ Deno.serve(async (req: Request) => {
       );
     }
     parsedResponse.forEach((bit, index) => {
-      if (!bit.word || !bit.storyBitDescription || !bit.imagePrompt) {
+      if (
+        !bit.word ||
+        !bit.storyBitDescription ||
+        !bit.storyBitDescriptionInLanguageYouKnow ||
+        !bit.imagePrompt
+      ) {
         // This error will be caught by the main try-catch and returned as a 500
         throw new Error(
-          `Gemini response bit ${index} is missing required fields. Bit: ${JSON.stringify(
+          `Gemini response bit ${index} is missing required fields (word, storyBitDescription, storyBitDescriptionInLanguageYouKnow, or imagePrompt). Bit: ${JSON.stringify(
             bit
           )}`
         );

@@ -17,7 +17,7 @@ export const generateAndSaveStory = async (
   // 1. Fetch vocabulary details (including title and languages)
   const { data: vocabulary, error: vocabError } = await supabase
     .from("vocabularies")
-    .select("title, source_language, target_language")
+    .select("title, source_language, target_language") // These will be renamed in DB/globally later
     .eq("id", vocabularyId)
     .single();
 
@@ -29,7 +29,10 @@ export const generateAndSaveStory = async (
     throw new StoryGenerationError("Vocabulary not found.", "VOCAB_NOT_FOUND");
   }
 
-  const { title: vocabularyTitle, source_language: sourceLanguage, target_language: targetLanguage } = vocabulary;
+  // Use new names internally for clarity, even if DB columns are old names for now
+  const vocabularyTitle = vocabulary.title;
+  const languageYouKnow = vocabulary.source_language;
+  const languageToLearn = vocabulary.target_language;
 
   // 2. Fetch all vocabulary words
   const { data: words, error: wordsError } = await supabase
@@ -55,14 +58,14 @@ export const generateAndSaveStory = async (
     // `generateStoryFromWords` expects an array of objects with at least a `word` property.
     const wordsForGemini = words.map(w => ({ word: w.word, translation: w.translation }));
 
-    if (!sourceLanguage || !targetLanguage) {
+    if (!languageYouKnow || !languageToLearn) {
         throw new StoryGenerationError(
-            "Source or target language not found for the vocabulary. Cannot generate story.",
+            "Language you know or language to learn not found for the vocabulary. Cannot generate story.",
             "LANGUAGES_MISSING"
         );
     }
 
-    geminiStoryBits = await generateStoryFromWords(wordsForGemini, vocabularyTitle, sourceLanguage, targetLanguage);
+    geminiStoryBits = await generateStoryFromWords(wordsForGemini, vocabularyTitle, languageYouKnow, languageToLearn);
   } catch (error: any) {
     console.error("Error generating story via Edge Function (Gemini):", error);
     if (error instanceof GeminiGenerationError) {
@@ -108,8 +111,9 @@ export const generateAndSaveStory = async (
       return {
         story_id: newStory.id,
         sequence_number: index + 1,
-        word: geminiBit.word, // This should be the word in the source language, as per Gemini prompt
-        sentence: geminiBit.storyBitDescription, // This is the story part in the target language
+        word: geminiBit.word, // This is the word in languageYouKnow
+        sentence: geminiBit.storyBitDescription, // This is the story part in languageToLearn
+        sentence_language_you_know: geminiBit.storyBitDescriptionInLanguageYouKnow, // New field
         image_prompt: geminiBit.imagePrompt, // The prompt for image generation
         image_url: "/placeholder.svg", // Using a public placeholder, image generation is separate
       };
