@@ -389,11 +389,10 @@ const LearningInterface = ({
     let urlToPlay = currentWord.audio_url;
     try {
       if (!urlToPlay) {
-        // Get source language from vocabulary details (assuming it's available or can be fetched)
-        // For this example, I'll hardcode 'en-US'. You might need to fetch vocabulary details.
+        // Get languageYouKnow from vocabulary details
         const { data: vocabularyData, error: vocabError } = await supabase
           .from("vocabularies")
-          .select("source_language")
+          .select("source_language") // Still 'source_language' in DB
           .eq("id", vocabularyId)
           .single();
 

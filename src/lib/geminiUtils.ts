@@ -9,7 +9,8 @@ interface WordDetail {
 
 export interface GeminiStoryBit {
   word: string;
-  storyBitDescription: string;
+  storyBitDescription: string; // In languageToLearn
+  storyBitDescriptionInLanguageYouKnow: string; // In languageYouKnow
   imagePrompt: string;
 }
 
@@ -24,8 +25,8 @@ export class GeminiGenerationError extends Error {
 export const generateStoryFromWords = async (
   words: WordDetail[],
   vocabularyTitle: string,
-  sourceLanguage: string,
-  targetLanguage: string
+  languageYouKnow: string,
+  languageToLearn: string
 ): Promise<GeminiStoryBit[]> => {
   if (!words || words.length === 0) {
     throw new GeminiGenerationError("No words provided to generate a story.");
@@ -34,8 +35,8 @@ export const generateStoryFromWords = async (
   const payload = {
     words,
     vocabularyTitle,
-    sourceLanguage,
-    targetLanguage,
+    languageYouKnow, // Updated parameter name
+    languageToLearn, // Updated parameter name
   };
 
   try {
@@ -74,9 +75,14 @@ export const generateStoryFromWords = async (
       );
     }
     data.forEach((bit, index) => {
-      if (!bit.word || !bit.storyBitDescription || !bit.imagePrompt) {
+      if (
+        !bit.word ||
+        !bit.storyBitDescription ||
+        !bit.storyBitDescriptionInLanguageYouKnow || // Check for the new field
+        !bit.imagePrompt
+      ) {
         throw new GeminiGenerationError(
-          `Story bit ${index} from service is missing one or more required fields (word, storyBitDescription, imagePrompt). Bit: ${JSON.stringify(bit)}`
+          `Story bit ${index} from service is missing one or more required fields (word, storyBitDescription, storyBitDescriptionInLanguageYouKnow, imagePrompt). Bit: ${JSON.stringify(bit)}` // Updated error message
         );
       }
     });
