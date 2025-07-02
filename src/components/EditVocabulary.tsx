@@ -113,6 +113,7 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
       setLanguageToLearn(vocabularyData.target_language); // DB field is target_language
       setIsPublic(vocabularyData.is_public || false); // Set isPublic from fetched data
       setStoryId(vocabularyData.stories?.[0]?.id || null);
+      setVocabularyImageUrl(vocabularyData.cover_image_url || null);
     }
   }, [vocabularyData]);
 
