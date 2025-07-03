@@ -165,7 +165,9 @@ const VocabularyList = ({
   };
 
   const deleteVocabularyMutation = useMutation({
-    mutationFn: async (vocabularyId: string) => {
+    mutationFn: async (vocabularyToDelete: Vocabulary) => {
+      const { id: vocabularyId, cover_image_url, story_id } = vocabularyToDelete;
+
       // Delete user progress first
       const { error: progressError } = await supabase
         .from("user_progress")
@@ -199,6 +201,59 @@ const VocabularyList = ({
         throw wordsError;
       }
 
+      // Delete story bits and story if a story exists
+      if (story_id) {
+        const { error: storyBitsError } = await supabase
+          .from("story_bits")
+          .delete()
+          .eq("story_id", story_id);
+
+        if (storyBitsError) {
+          console.error("Error deleting story bits:", storyBitsError);
+          throw storyBitsError;
+        }
+
+        const { error: storyError } = await supabase
+          .from("stories")
+          .delete()
+          .eq("id", story_id);
+
+        if (storyError) {
+          console.error("Error deleting story:", storyError);
+          throw storyError;
+        }
+      }
+
+      // Delete cover image if it exists
+      if (cover_image_url) {
+        try {
+          const url = new URL(cover_image_url);
+          const pathSegments = url.pathname.split('/');
+          // Example Supabase URL: https://<project-ref>.supabase.co/storage/v1/object/public/<bucket-name>/<path/to/file.jpg>
+          // pathSegments will be like: ['', 'storage', 'v1', 'object', 'public', <bucket-name>, <path/to/file.jpg>...]
+          const bucketNameIndex = pathSegments.indexOf('public') + 1;
+          if (bucketNameIndex > 0 && bucketNameIndex < pathSegments.length) {
+            const bucketName = pathSegments[bucketNameIndex];
+            const filePath = pathSegments.slice(bucketNameIndex + 1).join('/');
+            if (bucketName && filePath) {
+              const { error: imageError } = await supabase.storage
+                .from(bucketName)
+                .remove([filePath]);
+              if (imageError) {
+                console.error(`Error deleting image from bucket ${bucketName}, path ${filePath}:`, imageError);
+                // Not throwing error here, as vocab deletion should proceed even if image deletion fails
+              }
+            } else {
+              console.error("Could not determine bucket name or file path from URL:", cover_image_url);
+            }
+          } else {
+            console.error("Could not parse bucket name from URL:", cover_image_url);
+          }
+        } catch (e) {
+          console.error("Error parsing image URL or deleting image:", e);
+        }
+      }
+
       // Finally delete the vocabulary
       const { error: vocabError } = await supabase
         .from("vocabularies")
@@ -215,7 +270,7 @@ const VocabularyList = ({
         title: "Success!",
         description: "Vocabulary deleted successfully.",
       });
-      queryClient.invalidateQueries({ queryKey: ["vocabularies"] });
+      queryClient.invalidateQueries({ queryKey: ["vocabulariesWithStories", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["user-progress-all"] });
       queryClient.invalidateQueries({ queryKey: ["vocabulary-completion"] });
       setDeleteDialogOpen(false);
@@ -297,7 +352,7 @@ const VocabularyList = ({
 
   const confirmDelete = () => {
     if (selectedVocabulary) {
-      deleteVocabularyMutation.mutate(selectedVocabulary.id);
+      deleteVocabularyMutation.mutate(selectedVocabulary);
     }
   };
 
