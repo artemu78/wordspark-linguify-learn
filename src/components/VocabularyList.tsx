@@ -165,7 +165,9 @@ const VocabularyList = ({
   };
 
   const deleteVocabularyMutation = useMutation({
-    mutationFn: async (vocabularyId: string) => {
+    mutationFn: async (vocabularyToDelete: Vocabulary) => {
+      const { id: vocabularyId, cover_image_url, story_id } = vocabularyToDelete;
+
       // Delete user progress first
       const { error: progressError } = await supabase
         .from("user_progress")
@@ -199,6 +201,47 @@ const VocabularyList = ({
         throw wordsError;
       }
 
+      // Delete story bits and story if a story exists
+      if (story_id) {
+        const { error: storyBitsError } = await supabase
+          .from("story_bits")
+          .delete()
+          .eq("story_id", story_id);
+
+        if (storyBitsError) {
+          console.error("Error deleting story bits:", storyBitsError);
+          throw storyBitsError;
+        }
+
+        const { error: storyError } = await supabase
+          .from("stories")
+          .delete()
+          .eq("id", story_id);
+
+        if (storyError) {
+          console.error("Error deleting story:", storyError);
+          throw storyError;
+        }
+      }
+
+      // Delete cover image if it exists
+      if (cover_image_url) {
+        try {
+          const fileName = cover_image_url.split("/").pop();
+          if (fileName) {
+            const { error: imageError } = await supabase.storage
+              .from("cover-images")
+              .remove([fileName]);
+            if (imageError) {
+              console.error("Error deleting cover image:", imageError);
+              // Not throwing error here, as vocab deletion should proceed even if image deletion fails
+            }
+          }
+        } catch (e) {
+          console.error("Error parsing image URL or deleting image:", e);
+        }
+      }
+
       // Finally delete the vocabulary
       const { error: vocabError } = await supabase
         .from("vocabularies")
@@ -215,7 +258,7 @@ const VocabularyList = ({
         title: "Success!",
         description: "Vocabulary deleted successfully.",
       });
-      queryClient.invalidateQueries({ queryKey: ["vocabularies"] });
+      queryClient.invalidateQueries({ queryKey: ["vocabulariesWithStories", user?.id] });
       queryClient.invalidateQueries({ queryKey: ["user-progress-all"] });
       queryClient.invalidateQueries({ queryKey: ["vocabulary-completion"] });
       setDeleteDialogOpen(false);
@@ -297,7 +340,7 @@ const VocabularyList = ({
 
   const confirmDelete = () => {
     if (selectedVocabulary) {
-      deleteVocabularyMutation.mutate(selectedVocabulary.id);
+      deleteVocabularyMutation.mutate(selectedVocabulary);
     }
   };
 
