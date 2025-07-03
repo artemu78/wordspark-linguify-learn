@@ -8,12 +8,13 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useAuth } from '@/contexts/AuthContext';
 import { useToast } from '@/hooks/use-toast';
 import { Loader2 } from 'lucide-react';
+import { Separator } from '@/components/ui/separator';
 
 const AuthPage = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [signInData, setSignInData] = useState({ email: '', password: '' });
   const [signUpData, setSignUpData] = useState({ email: '', password: '', fullName: '' });
-  const { signIn, signUp } = useAuth();
+  const { signIn, signUp, signInWithGoogle } = useAuth();
   const { toast } = useToast();
 
   const handleSignIn = async (e: React.FormEvent) => {
@@ -60,6 +61,21 @@ const AuthPage = () => {
     setIsLoading(false);
   };
 
+  const handleGoogleSignIn = async () => {
+    setIsLoading(true);
+    const { error } = await signInWithGoogle();
+    
+    if (error) {
+      toast({
+        title: "Error signing in with Google",
+        description: error.message,
+        variant: "destructive"
+      });
+      setIsLoading(false);
+    }
+    // Note: Loading will be handled by auth state change on successful redirect
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-blue-50 to-indigo-100 p-4">
       <Card className="w-full max-w-md">
@@ -101,6 +117,20 @@ const AuthPage = () => {
                   Sign In
                 </Button>
               </form>
+              
+              <div className="mt-4">
+                <Separator className="my-4" />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleGoogleSignIn}
+                  disabled={isLoading}
+                >
+                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Continue with Google
+                </Button>
+              </div>
             </TabsContent>
             
             <TabsContent value="signup">
@@ -138,6 +168,20 @@ const AuthPage = () => {
                   Sign Up
                 </Button>
               </form>
+              
+              <div className="mt-4">
+                <Separator className="my-4" />
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleGoogleSignIn}
+                  disabled={isLoading}
+                >
+                  {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+                  Continue with Google
+                </Button>
+              </div>
             </TabsContent>
           </Tabs>
         </CardContent>
