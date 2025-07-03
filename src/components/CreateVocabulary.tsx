@@ -62,35 +62,33 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
     }
   }, [fetchLanguages, languagesHasFetched]);
 
-  // Set default languages once fetched and not yet set by user
+  // Effect to set default for languageYouKnow
   useEffect(() => {
-    if (languages.length > 0) {
-      let currentKnowLangCode: string | undefined = languageYouKnow;
-
-      if (currentKnowLangCode === undefined) {
-        const defaultUserLang = languages.find(lang => lang.code === "en") || languages[0];
-        if (defaultUserLang) {
-          setLanguageYouKnow(defaultUserLang.code);
-          currentKnowLangCode = defaultUserLang.code; // Update for use in LTL logic immediately
-        }
-      }
-
-      if (languageToLearn === undefined) {
-        const preferredLearnLang = languages.find(lang => lang.code === "es");
-        if (preferredLearnLang && preferredLearnLang.code !== currentKnowLangCode) {
-          setLanguageToLearn(preferredLearnLang.code);
-        } else {
-          // Find first available language that is not currentKnowLangCode
-          const fallbackLearnLang = languages.find(lang => lang.code !== currentKnowLangCode);
-          if (fallbackLearnLang) {
-            setLanguageToLearn(fallbackLearnLang.code);
-          }
-          // If no suitable fallback is found, languageToLearn remains undefined.
-          // Validation prior to submission will handle this.
-        }
+    if (languages.length > 0 && languageYouKnow === undefined) {
+      const defaultUserLang = languages.find(lang => lang.code === "en") || languages[0];
+      if (defaultUserLang) {
+        setLanguageYouKnow(defaultUserLang.code);
       }
     }
-  }, [languages, languageYouKnow]); // languageYouKnow is needed as its update affects languageToLearn default.
+  }, [languages]); // Only depends on languages
+
+  // Effect to set default for languageToLearn
+  useEffect(() => {
+    if (languages.length > 0 && languageYouKnow && languageToLearn === undefined) {
+      const preferredLearnLang = languages.find(lang => lang.code === "es");
+      if (preferredLearnLang && preferredLearnLang.code !== languageYouKnow) {
+        setLanguageToLearn(preferredLearnLang.code);
+      } else {
+        // Find first available language that is not languageYouKnow
+        const fallbackLearnLang = languages.find(lang => lang.code !== languageYouKnow);
+        if (fallbackLearnLang) {
+          setLanguageToLearn(fallbackLearnLang.code);
+        }
+        // If no suitable fallback is found, languageToLearn remains undefined.
+        // Validation prior to submission will handle this.
+      }
+    }
+  }, [languages, languageYouKnow, languageToLearn]); // Depends on languages, languageYouKnow, and languageToLearn (to check if it's undefined)
 
   const [aiWordCount, setAiWordCount] = useState(10);
   const [createdVocabularyId, setCreatedVocabularyId] = useState<string | null>(
