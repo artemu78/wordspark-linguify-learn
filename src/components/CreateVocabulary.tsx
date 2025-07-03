@@ -40,8 +40,8 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
   );
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
-  const [languageYouKnow, setLanguageYouKnow] = useState("en"); // Renamed from sourceLanguage
-  const [languageToLearn, setLanguageToLearn] = useState("es"); // Renamed from targetLanguage
+  const [languageYouKnow, setLanguageYouKnow] = useState<string | undefined>(undefined); // Renamed from sourceLanguage
+  const [languageToLearn, setLanguageToLearn] = useState<string | undefined>(undefined); // Renamed from targetLanguage
   const [isPublic, setIsPublic] = useState(false); // Added isPublic state
   const [wordPairs, setWordPairs] = useState<WordPair[]>([
     { word: "", translation: "" },
@@ -62,18 +62,34 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
     }
   }, [fetchLanguages, languagesHasFetched]);
 
-  // Set default languages once fetched and not yet set by user
+  // Effect to set default for languageYouKnow
   useEffect(() => {
-    if (languages.length > 0 && languageYouKnow === "en" && languageToLearn === "es") {
-      // Basic default, consider if user has already changed them
-      // This logic might need refinement if we want to preserve user's initial non-default choices
-      // before languages are loaded. For now, it sets if current state is the initial default.
-      const defaultLanguageYouKnow = languages.find(lang => lang.code === "en");
-      const defaultLanguageToLearn = languages.find(lang => lang.code === "es");
-      if (defaultLanguageYouKnow) setLanguageYouKnow(defaultLanguageYouKnow.code);
-      if (defaultLanguageToLearn) setLanguageToLearn(defaultLanguageToLearn.code);
+    if (languages.length > 0 && languageYouKnow === undefined) {
+      const defaultUserLang = languages.find(lang => lang.code === "en") || languages[0];
+      if (defaultUserLang) {
+        setLanguageYouKnow(defaultUserLang.code);
+      }
     }
-  }, [languages, languageYouKnow, languageToLearn]);
+  }, [languages]); // Only depends on languages
+
+  // Effect to set default for languageToLearn
+  useEffect(() => {
+    if (languages.length > 0 && languageYouKnow && languageToLearn === undefined) {
+      const preferredLearnLang = languages.find(lang => lang.code === "es");
+      if (preferredLearnLang && preferredLearnLang.code !== languageYouKnow) {
+        setLanguageToLearn(preferredLearnLang.code);
+      } else {
+        // Find first available language that is not languageYouKnow
+        const fallbackLearnLang = languages.find(lang => lang.code !== languageYouKnow);
+        if (fallbackLearnLang) {
+          setLanguageToLearn(fallbackLearnLang.code);
+        }
+        // If no suitable fallback is found, languageToLearn remains undefined.
+        // Validation prior to submission will handle this.
+      }
+    }
+  }, [languages, languageYouKnow, languageToLearn]); // Depends on languages, languageYouKnow, and languageToLearn (to check if it's undefined)
+
   const [aiWordCount, setAiWordCount] = useState(10);
   const [createdVocabularyId, setCreatedVocabularyId] = useState<string | null>(
     null
@@ -186,6 +202,22 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
       });
       return;
     }
+    if (!languageYouKnow || !languageToLearn) {
+      toast({
+        title: "Error",
+        description: "Please select both 'Language you know' and 'Language to learn'.",
+        variant: "destructive",
+      });
+      return;
+    }
+    if (languageYouKnow === languageToLearn) {
+      toast({
+        title: "Error",
+        description: "'Language you know' and 'Language to learn' must be different.",
+        variant: "destructive",
+      });
+      return;
+    }
     generateVocabularyMutation.mutate();
   };
 
@@ -216,6 +248,24 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
       toast({
         title: "Error",
         description: "Please fill in the title and topic.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!languageYouKnow || !languageToLearn) {
+      toast({
+        title: "Error",
+        description: "Please select both 'Language you know' and 'Language to learn'.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (languageYouKnow === languageToLearn) {
+      toast({
+        title: "Error",
+        description: "'Language you know' and 'Language to learn' must be different.",
         variant: "destructive",
       });
       return;
