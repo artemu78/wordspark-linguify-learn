@@ -24,7 +24,7 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
   const [currentBitIndex, setCurrentBitIndex] = useState(0);
 
   // 1. Fetch the story to get vocabulary_id
-  const { data: storyData, isLoading: isLoadingStory } = useQuery<Story | null, Error>({
+  const { data: storyData, isLoading: isLoadingStory } = useQuery<{id: string, vocabulary_id: string} | null, Error>({
     queryKey: ["story", storyId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -40,7 +40,7 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
   const vocabularyId = storyData?.vocabulary_id;
 
   // 2. Fetch all words and translations for the vocabulary
-  const { data: vocabularyWords, isLoading: isLoadingVocabWords } = useQuery<VocabularyWord[], Error>({
+  const { data: vocabularyWords, isLoading: isLoadingVocabWords } = useQuery<{id: string, word: string, translation: string}[], Error>({
     queryKey: ["vocabularyWords", vocabularyId],
     queryFn: async () => {
       if (!vocabularyId) return []; // Should not happen if story loads and has vocab_id
@@ -129,7 +129,7 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
         <p className="text-gray-700 mb-4">
           There was a problem fetching the story. Please try again later.
         </p>
-        <p className="text-sm text-gray-500 mb-6">Error: {error.message}</p>
+        <p className="text-sm text-gray-500 mb-6">Error: {storyBitsError.message}</p>
         <Button onClick={onBack} variant="outline">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Dashboard

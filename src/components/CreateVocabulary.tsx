@@ -257,7 +257,7 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
 
     setIsCreatingStory(true);
     try {
-      const storyId = await generateAndSaveStory(createdVocabularyId, title);
+      const storyId = await generateAndSaveStory(createdVocabularyId);
       if (storyId) {
         toast({
           title: "Story Created!",

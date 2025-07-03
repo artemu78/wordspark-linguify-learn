@@ -5,7 +5,13 @@ import VocabularyList from "@/components/VocabularyList";
 import LearningInterface from "@/components/LearningInterface";
 import CreateVocabulary from "@/components/CreateVocabulary";
 import EditVocabulary from "@/components/EditVocabulary";
-import PlayStoryInterface from "@/components/PlayStoryInterface"; // Added
+import PlayStoryInterface from "@/components/PlayStoryInterface";
+
+interface Vocabulary {
+  id: string;
+  title: string;
+  cover_image_url?: string;
+}
 
 type View = "list" | "learn" | "create" | "edit" | "playStory"; // Added 'playStory'
 
@@ -49,11 +55,7 @@ const Dashboard = () => {
     setSelectedInfo(null); // Clear selection when going to create
   };
 
-  const handleEditVocabulary = (vocabulary: {
-    id: string;
-    title: string;
-    cover_image_url: string;
-  }) => {
+  const handleEditVocabulary = (vocabulary: Vocabulary) => {
     setSelectedInfo({
       id: vocabulary.id,
       title: vocabulary.title,
