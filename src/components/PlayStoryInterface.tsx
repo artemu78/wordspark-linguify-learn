@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import React, { useState, useEffect, useRef } from "react";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ChevronLeft, ChevronRight, RotateCcw, BookOpen } from "lucide-react";
+import { ArrowLeft, ChevronLeft, ChevronRight, RotateCcw, BookOpen, Volume2 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tables } from "@/integrations/supabase/types";
 
@@ -22,6 +23,10 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
   onBack,
 }) => {
   const [currentBitIndex, setCurrentBitIndex] = useState(0);
+  const [audioUrl, setAudioUrl] = useState<string | null>(null);
+  const [isAudioLoading, setIsAudioLoading] = useState(false);
+  const audioRef = useRef<HTMLAudioElement>(null);
+  const { toast } = useToast();
 
   // 1. Fetch the story to get vocabulary_id
   const { data: storyData, isLoading: isLoadingStory } = useQuery<{id: string, vocabulary_id: string} | null, Error>({
@@ -40,13 +45,13 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
   const vocabularyId = storyData?.vocabulary_id;
 
   // 2. Fetch all words and translations for the vocabulary
-  const { data: vocabularyWords, isLoading: isLoadingVocabWords } = useQuery<{id: string, word: string, translation: string}[], Error>({
+  const { data: vocabularyWords, isLoading: isLoadingVocabWords } = useQuery<{id: string, word: string, translation: string, audio_url?: string | null}[], Error>({
     queryKey: ["vocabularyWords", vocabularyId],
     queryFn: async () => {
       if (!vocabularyId) return []; // Should not happen if story loads and has vocab_id
       const { data, error } = await supabase
         .from("vocabulary_words")
-        .select("id, word, translation")
+        .select("id, word, translation, audio_url")
         .eq("vocabulary_id", vocabularyId);
       if (error) throw error;
       return data || [];
@@ -109,6 +114,76 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
 
   const handleRestart = () => {
     setCurrentBitIndex(0);
+  };
+
+  const handleListen = async () => {
+    if (!currentBit || isAudioLoading) return;
+
+    setIsAudioLoading(true);
+    setAudioUrl(null);
+    
+    // Check if the vocabulary word already has audio_url
+    const vocabularyWord = vocabularyWords?.find(vw => vw.word === currentBit.word);
+    let urlToPlay = vocabularyWord?.audio_url;
+    
+    try {
+      if (!urlToPlay) {
+        // Get languageYouKnow from vocabulary details
+        const { data: vocabularyData, error: vocabError } = await supabase
+          .from("vocabularies")
+          .select("source_language")
+          .eq("id", vocabularyId)
+          .single();
+
+        if (vocabError || !vocabularyData) {
+          throw new Error(
+            vocabError?.message ||
+              "Could not fetch vocabulary details for language code."
+          );
+        }
+        const languageCode = vocabularyData.source_language;
+
+        const { data, error } = await supabase.functions.invoke(
+          "generate-audio",
+          {
+            body: { word: currentBit.word, languageCode: languageCode },
+          }
+        );
+
+        if (error) throw error;
+        if (!data || !data.audioUrl)
+          throw new Error("Audio URL not found in response");
+
+        urlToPlay = data.audioUrl;
+
+        // Update the vocabulary_words table with the new audio_url if we have the word ID
+        if (vocabularyWord?.id) {
+          const updateResponse = await supabase
+            .from("vocabulary_words")
+            .update({ audio_url: urlToPlay })
+            .eq("id", vocabularyWord.id);
+
+          if (updateResponse.error) {
+            console.error(
+              "Error updating word with audio_url:",
+              updateResponse.error
+            );
+          }
+        }
+      }
+
+      setAudioUrl(urlToPlay);
+      await playWordAudio(urlToPlay, audioRef);
+    } catch (err: any) {
+      console.error("Error generating or fetching audio:", err);
+      toast({
+        title: "Error",
+        description: err.message || "Failed to play audio.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsAudioLoading(false);
+    }
   };
 
   // Combined loading state
@@ -182,14 +257,27 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
                 )}
               </div>
               <div>
-                <p className="text-3xl font-semibold text-indigo-600 mb-3"> {/* Adjusted mb here for overall spacing */}
-                  {currentBit.word}
-                  {vocabularyWords && vocabularyWords.length > 0 && (
-                    <span className="text-xl text-gray-500 ml-2">
-                      ({vocabularyWords.find(vw => vw.word === currentBit.word)?.translation || "Translation not found"})
-                    </span>
-                  )}
-                </p>
+                <div className="flex items-center justify-center space-x-2 mb-3">
+                  <p className="text-3xl font-semibold text-indigo-600">
+                    {currentBit.word}
+                    {vocabularyWords && vocabularyWords.length > 0 && (
+                      <span className="text-xl text-gray-500 ml-2">
+                        ({vocabularyWords.find(vw => vw.word === currentBit.word)?.translation || "Translation not found"})
+                      </span>
+                    )}
+                  </p>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={handleListen}
+                    disabled={isAudioLoading || !currentBit}
+                    aria-label="Listen to word"
+                  >
+                    <Volume2
+                      className={`h-6 w-6 ${isAudioLoading ? "animate-spin" : ""}`}
+                    />
+                  </Button>
+                </div>
                 <p className="text-lg text-gray-700 leading-relaxed mb-2"> {/* mb-2 to add space before the next language bit */}
                   {renderDescriptionWithBoldWord(currentBit.sentence, currentBit.word)}
                 </p>
@@ -203,6 +291,7 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
                   </div>
                 )}
               </div>
+              <audio ref={audioRef} src={audioUrl} className="hidden" />
             </div>
           )}
         </CardContent>
@@ -239,5 +328,27 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
     </div>
   );
 };
+
+async function playWordAudio(
+  audioUrl: string,
+  audioRef: React.MutableRefObject<HTMLAudioElement>
+) {
+  if (audioUrl && audioRef.current) {
+    // Ensure the audio is loaded before attempting to play
+    audioRef.current.src = audioUrl;
+    await audioRef.current.load(); // Preload the audio file
+    audioRef.current.play().catch((e) => {
+      console.error("Error playing audio:", e);
+      // Retry playing after 1 second
+      setTimeout(() => {
+        audioRef.current
+          ?.play()
+          .catch((retryError) =>
+            console.error("Retry failed to play audio:", retryError)
+          );
+      }, 1000);
+    });
+  }
+}
 
 export default PlayStoryInterface;
