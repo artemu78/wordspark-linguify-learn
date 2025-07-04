@@ -519,35 +519,6 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label>Language you know</Label>
-                <Select
-                  value={languageYouKnow}
-                  onValueChange={setLanguageYouKnow}
-                  disabled={
-                      updateVocabularyMutation.isPending || isCreatingStory || languagesLoading || isReGeneratingStory
-                  }
-                >
-                  <SelectTrigger>
-                      {languagesLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      ) : (
-                        <SelectValue placeholder="Select language you know" />
-                      )}
-                  </SelectTrigger>
-                  <SelectContent>
-                      {languagesError && <SelectItem value="error" disabled>{languagesError}</SelectItem>}
-                      {!languagesLoading && !languagesError && languages.length === 0 && (
-                        <SelectItem value="no-langs" disabled>No languages available</SelectItem>
-                      )}
-                      {languages.map((lang) => (
-                        <SelectItem key={lang.code} value={lang.code}>
-                          {lang.name}
-                        </SelectItem>
-                      ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
                 <Label>Language to learn</Label>
                 <Select
                   value={languageToLearn}
@@ -573,6 +544,35 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                           {lang.name}
                         </SelectItem>
                        ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Language you know</Label>
+                <Select
+                  value={languageYouKnow}
+                  onValueChange={setLanguageYouKnow}
+                  disabled={
+                      updateVocabularyMutation.isPending || isCreatingStory || languagesLoading || isReGeneratingStory
+                  }
+                >
+                  <SelectTrigger>
+                      {languagesLoading ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : (
+                        <SelectValue placeholder="Select language you know" />
+                      )}
+                  </SelectTrigger>
+                  <SelectContent>
+                      {languagesError && <SelectItem value="error" disabled>{languagesError}</SelectItem>}
+                      {!languagesLoading && !languagesError && languages.length === 0 && (
+                        <SelectItem value="no-langs" disabled>No languages available</SelectItem>
+                      )}
+                      {languages.map((lang) => (
+                        <SelectItem key={lang.code} value={lang.code}>
+                          {lang.name}
+                        </SelectItem>
+                      ))}
                   </SelectContent>
                 </Select>
               </div>
