@@ -713,17 +713,6 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                         updateVocabularyMutation.isPending || isCreatingStory || isReGeneratingStory
                       }
                     />
-                    <Input
-                      placeholder="Translation"
-                      value={pair.translation}
-                      onChange={(e) =>
-                        updateWordPair(index, "translation", e.target.value)
-                      }
-                      className="flex-1"
-                      disabled={
-                        updateVocabularyMutation.isPending || isCreatingStory || isReGeneratingStory
-                      }
-                    />
                     <Button
                       type="button"
                       variant="outline"
@@ -743,6 +732,17 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                         <Languages className="h-4 w-4" />
                       )}
                     </Button>
+                    <Input
+                      placeholder="Translation"
+                      value={pair.translation}
+                      onChange={(e) =>
+                        updateWordPair(index, "translation", e.target.value)
+                      }
+                      className="flex-1"
+                      disabled={
+                        updateVocabularyMutation.isPending || isCreatingStory || isReGeneratingStory
+                      }
+                    />
                     {wordPairs.length > 1 && (
                       <Button
                         type="button"
