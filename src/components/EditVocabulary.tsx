@@ -725,6 +725,7 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                         translatingWords.has(index) ||
                         !pair.word.trim()
                       }
+                        data-testid={`translate-word-${index}`}
                     >
                       {translatingWords.has(index) ? (
                         <Loader2 className="h-4 w-4 animate-spin" />
@@ -752,6 +753,7 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                         disabled={
                           updateVocabularyMutation.isPending || isCreatingStory || isReGeneratingStory
                         }
+                          data-testid={`remove-word-pair-${index}`}
                       >
                         <Trash2 className="h-4 w-4" />
                       </Button>
