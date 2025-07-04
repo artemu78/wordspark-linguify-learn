@@ -1,48 +1,50 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { corsHeaders } from '../_shared/cors.ts'
-
-console.log("Hello from Functions!")
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { corsHeaders } from "../_shared/cors.ts";
 
 Deno.serve(async (req) => {
   // This is needed if you're planning to invoke your function from a browser.
-  if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
 
   try {
     // Create a Supabase client with the Auth context of the logged in user.
     const supabaseClient = createClient(
       // Supabase API URL - env var exported by default.
-      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get("SUPABASE_URL") ?? "",
       // Supabase API ANON KEY - env var exported by default.
-      Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      Deno.env.get("SUPABASE_ANON_KEY") ?? "",
       // Create client with Auth context of the user that called the function.
       // This way your row-level-security (RLS) policies are applied.
-      { global: { headers: { Authorization: req.headers.get('Authorization')! } } }
-    )
+      {
+        global: {
+          headers: { Authorization: req.headers.get("Authorization")! },
+        },
+      }
+    );
 
     // Fetch languages from the 'languages' table.
     const { data, error } = await supabaseClient
-      .from('languages')
-      .select('id, name, code')
-      .order('name', { ascending: true });
+      .from("languages")
+      .select("id, name, code")
+      .order("name", { ascending: true });
 
     if (error) {
-      throw error
+      throw error;
     }
 
     return new Response(JSON.stringify({ languages: data }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 200,
-    })
+    });
   } catch (err) {
     console.error("Error fetching languages:", err);
     return new Response(JSON.stringify({ error: err.message }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
-    })
+    });
   }
-})
+});
 
 /*
 To deploy this function:

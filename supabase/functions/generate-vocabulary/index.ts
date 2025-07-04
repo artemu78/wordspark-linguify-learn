@@ -6,7 +6,6 @@ const corsHeaders = {
   "Access-Control-Allow-Headers":
     "authorization, x-client-info, apikey, content-type",
 };
-
 function transliterate(str) {
   const normalizedNFD = str
     .normalize("NFD")
@@ -24,21 +23,15 @@ function transliterate(str) {
   const latinOnly = normalizedNFKC.replace(/[^a-zA-Z0-9]/g, "");
   return latinOnly;
 }
-
-const getEnvVariable = (varName: string) => {
+const getEnvVariable = (varName) => {
   const value = Deno.env.get(varName);
   if (!value) {
     throw new Error(`Environment variable ${varName} is not set`);
   }
   return value;
 };
-
 // Call gemini API to generate vocabulary image
-async function generateVocabularyImage(
-  sourceLanguage: string,
-  targetLanguage: string,
-  topic: string
-) {
+async function generateVocabularyImage(sourceLanguage, targetLanguage, topic) {
   const apiKey = getEnvVariable("GEMINI_API_KEY");
   const imagenResponse = await fetch(
     `https://generativelanguage.googleapis.com/v1beta/models/imagen-3.0-generate-002:predict?key=${apiKey}`,
@@ -53,18 +46,18 @@ async function generateVocabularyImage(
             prompt: `Generate an image that visually represents vocabulary with the topic "${topic}" in ${sourceLanguage} language with their translations to ${targetLanguage}. The image should be educational and visually appealing, suitable for a language learning context.`,
           },
         ],
-        parameters: { sampleCount: 1 },
+        parameters: {
+          sampleCount: 1,
+        },
       }),
     }
   );
-
   if (!imagenResponse.ok) {
     const errorBody = await imagenResponse.json().catch(() => null); // safely parse JSON
     const message = errorBody?.error?.message || "Unknown error";
     const status = errorBody?.error?.status || imagenResponse.status;
     throw new Error(`Imagen API error: ${status} - ${message}`);
   }
-
   const imagenData = await imagenResponse.json();
   if (!imagenData || !imagenData.predictions || !imagenData.predictions[0]) {
     throw new Error(
@@ -93,12 +86,10 @@ async function generateVocabularyImage(
     console.error("Failed to decode image data from response", e);
     throw new Error("Failed to decode image data from response");
   }
-
   // } catch (e) {
   //   console.error("Failed to read content from response");
   //   throw new Error("Failed to read image data");
   // }
-
   let coverImageUrl;
   const fileName = `${transliterate(
     `covers/${sourceLanguage}_${targetLanguage}_${topic}`
@@ -108,10 +99,8 @@ async function generateVocabularyImage(
   } catch (e) {
     throw new Error("error in uploadToStorage" + e.message.toString());
   }
-
   return coverImageUrl;
 }
-
 // Helper function to handle Supabase storage upload and get public URL
 async function uploadToStorage(filePath, data, contentType) {
   const supabaseClient = createClient(
@@ -135,7 +124,6 @@ async function uploadToStorage(filePath, data, contentType) {
   }
   return publicUrlData.publicUrl;
 }
-
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -145,17 +133,17 @@ serve(async (req) => {
   try {
     const {
       topic,
-      sourceLanguage,
-      targetLanguage,
+      languageToLearn,
+      languageYouKnow,
       wordCount = 10,
     } = await req.json();
     const apiKey = getEnvVariable("GEMINI_API_KEY");
-    const prompt = `Generate ${wordCount} vocabulary words for the topic "${topic}" in ${sourceLanguage} language with their translations to ${targetLanguage}. 
+    const prompt = `Generate ${wordCount} vocabulary words for the topic "${topic}" in ${languageToLearn} language with their translations to ${languageYouKnow}. 
     
     Return the response as a JSON array where each object has this exact structure:
     {
-      "word": "word in ${sourceLanguage}",
-      "translation": "translation in ${targetLanguage}"
+      "word": "word in ${languageToLearn}",
+      "translation": "translation in ${languageYouKnow}"
     }
     
     Only return the JSON array, no other text or explanation.`;
@@ -207,15 +195,14 @@ serve(async (req) => {
     let coverImageUrl = "";
     try {
       coverImageUrl = await generateVocabularyImage(
-        sourceLanguage,
-        targetLanguage,
+        languageToLearn,
+        languageYouKnow,
         topic
       );
     } catch (e) {
       console.error("Error generating vocabulary image:", e);
       throw new Error("Error generating vocabulary image: " + e.message);
     }
-
     const vocabularyWords = JSON.parse(jsonMatch[0]);
     return new Response(
       JSON.stringify({

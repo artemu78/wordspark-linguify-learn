@@ -10,7 +10,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Plus, Trash2, Sparkles, BookPlus, Loader2, Languages } from "lucide-react"; // Added BookPlus, Loader2, Languages
+import {
+  ArrowLeft,
+  Plus,
+  Trash2,
+  Sparkles,
+  BookPlus,
+  Loader2,
+  Languages,
+} from "lucide-react"; // Added BookPlus, Loader2, Languages
 import { Switch } from "@/components/ui/switch"; // Added Switch
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -40,8 +48,12 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
   );
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
-  const [languageYouKnow, setLanguageYouKnow] = useState<string | undefined>(undefined); // Renamed from sourceLanguage
-  const [languageToLearn, setLanguageToLearn] = useState<string | undefined>(undefined); // Renamed from targetLanguage
+  const [languageYouKnow, setLanguageYouKnow] = useState<string | undefined>(
+    undefined
+  ); // Renamed from sourceLanguage
+  const [languageToLearn, setLanguageToLearn] = useState<string | undefined>(
+    undefined
+  ); // Renamed from targetLanguage
   const [isPublic, setIsPublic] = useState(false); // Added isPublic state
   const [wordPairs, setWordPairs] = useState<WordPair[]>([
     { word: "", translation: "" },
@@ -65,7 +77,8 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
   // Effect to set default for languageYouKnow
   useEffect(() => {
     if (languages.length > 0 && languageYouKnow === undefined) {
-      const defaultUserLang = languages.find(lang => lang.code === "en") || languages[0];
+      const defaultUserLang =
+        languages.find((lang) => lang.code === "en") || languages[0];
       if (defaultUserLang) {
         setLanguageYouKnow(defaultUserLang.code);
       }
@@ -74,13 +87,19 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
 
   // Effect to set default for languageToLearn
   useEffect(() => {
-    if (languages.length > 0 && languageYouKnow && languageToLearn === undefined) {
-      const preferredLearnLang = languages.find(lang => lang.code === "es");
+    if (
+      languages.length > 0 &&
+      languageYouKnow &&
+      languageToLearn === undefined
+    ) {
+      const preferredLearnLang = languages.find((lang) => lang.code === "es");
       if (preferredLearnLang && preferredLearnLang.code !== languageYouKnow) {
         setLanguageToLearn(preferredLearnLang.code);
       } else {
         // Find first available language that is not languageYouKnow
-        const fallbackLearnLang = languages.find(lang => lang.code !== languageYouKnow);
+        const fallbackLearnLang = languages.find(
+          (lang) => lang.code !== languageYouKnow
+        );
         if (fallbackLearnLang) {
           setLanguageToLearn(fallbackLearnLang.code);
         }
@@ -96,17 +115,26 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
   );
   const [isCreatingStory, setIsCreatingStory] = useState(false);
   const [storyCreated, setStoryCreated] = useState(false);
-  const [translatingWords, setTranslatingWords] = useState<Set<number>>(new Set());
+  const [translatingWords, setTranslatingWords] = useState<Set<number>>(
+    new Set()
+  );
 
   const generateVocabularyMutation = useMutation({
     mutationFn: async () => {
+      const languageYouKnowName = languages.find(
+        (lang) => lang.code === languageYouKnow
+      )?.name;
+      const languageToLearnName = languages.find(
+        (lang) => lang.code === languageToLearn
+      )?.name;
+
       const { data, error } = await supabase.functions.invoke(
         "generate-vocabulary",
         {
           body: {
             topic,
-            languageYouKnow,
-            languageToLearn,
+            languageYouKnow: `${languageYouKnowName} (${languageYouKnow})`,
+            languageToLearn: `${languageToLearnName} (${languageToLearn})`,
             wordCount: aiWordCount,
           },
         }
@@ -154,7 +182,7 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
     },
     onSuccess: ({ translation, index }) => {
       updateWordPair(index, "translation", translation);
-      setTranslatingWords(prev => {
+      setTranslatingWords((prev) => {
         const newSet = new Set(prev);
         newSet.delete(index);
         return newSet;
@@ -165,7 +193,7 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
       });
     },
     onError: (error: any, { index }) => {
-      setTranslatingWords(prev => {
+      setTranslatingWords((prev) => {
         const newSet = new Set(prev);
         newSet.delete(index);
         return newSet;
@@ -260,7 +288,7 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
       return;
     }
 
-    setTranslatingWords(prev => new Set(prev).add(index));
+    setTranslatingWords((prev) => new Set(prev).add(index));
     translateWordMutation.mutate({ word, index });
   };
 
@@ -276,7 +304,8 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
     if (!languageYouKnow || !languageToLearn) {
       toast({
         title: "Error",
-        description: "Please select both 'Language you know' and 'Language to learn'.",
+        description:
+          "Please select both 'Language you know' and 'Language to learn'.",
         variant: "destructive",
       });
       return;
@@ -284,7 +313,8 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
     if (languageYouKnow === languageToLearn) {
       toast({
         title: "Error",
-        description: "'Language you know' and 'Language to learn' must be different.",
+        description:
+          "'Language you know' and 'Language to learn' must be different.",
         variant: "destructive",
       });
       return;
@@ -327,7 +357,8 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
     if (!languageYouKnow || !languageToLearn) {
       toast({
         title: "Error",
-        description: "Please select both 'Language you know' and 'Language to learn'.",
+        description:
+          "Please select both 'Language you know' and 'Language to learn'.",
         variant: "destructive",
       });
       return;
@@ -336,7 +367,8 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
     if (languageYouKnow === languageToLearn) {
       toast({
         title: "Error",
-        description: "'Language you know' and 'Language to learn' must be different.",
+        description:
+          "'Language you know' and 'Language to learn' must be different.",
         variant: "destructive",
       });
       return;
@@ -485,7 +517,9 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
                   <Select
                     value={languageToLearn}
                     onValueChange={setLanguageToLearn}
-                    disabled={createVocabularyMutation.isPending || languagesLoading}
+                    disabled={
+                      createVocabularyMutation.isPending || languagesLoading
+                    }
                   >
                     <SelectTrigger>
                       {languagesLoading ? (
@@ -495,10 +529,18 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
                       )}
                     </SelectTrigger>
                     <SelectContent>
-                      {languagesError && <SelectItem value="error" disabled>{languagesError}</SelectItem>}
-                      {!languagesLoading && !languagesError && languages.length === 0 && (
-                         <SelectItem value="no-langs" disabled>No languages available</SelectItem>
+                      {languagesError && (
+                        <SelectItem value="error" disabled>
+                          {languagesError}
+                        </SelectItem>
                       )}
+                      {!languagesLoading &&
+                        !languagesError &&
+                        languages.length === 0 && (
+                          <SelectItem value="no-langs" disabled>
+                            No languages available
+                          </SelectItem>
+                        )}
                       {languages.map((lang) => (
                         <SelectItem key={lang.code} value={lang.code}>
                           {lang.name}
@@ -512,7 +554,9 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
                   <Select
                     value={languageYouKnow}
                     onValueChange={setLanguageYouKnow}
-                    disabled={createVocabularyMutation.isPending || languagesLoading}
+                    disabled={
+                      createVocabularyMutation.isPending || languagesLoading
+                    }
                   >
                     <SelectTrigger>
                       {languagesLoading ? (
@@ -522,10 +566,18 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
                       )}
                     </SelectTrigger>
                     <SelectContent>
-                      {languagesError && <SelectItem value="error" disabled>{languagesError}</SelectItem>}
-                      {!languagesLoading && !languagesError && languages.length === 0 && (
-                        <SelectItem value="no-langs" disabled>No languages available</SelectItem>
+                      {languagesError && (
+                        <SelectItem value="error" disabled>
+                          {languagesError}
+                        </SelectItem>
                       )}
+                      {!languagesLoading &&
+                        !languagesError &&
+                        languages.length === 0 && (
+                          <SelectItem value="no-langs" disabled>
+                            No languages available
+                          </SelectItem>
+                        )}
                       {languages.map((lang) => (
                         <SelectItem key={lang.code} value={lang.code}>
                           {lang.name}

@@ -1,5 +1,5 @@
-import { create } from 'zustand';
-import { supabase } from '@/integrations/supabase/client'; // Assuming you have a Supabase client initialized
+import { create } from "zustand";
+import { supabase } from "@/integrations/supabase/client"; // Assuming you have a Supabase client initialized
 
 interface Language {
   id: number | string; // Depending on your DB schema (bigint or uuid)
@@ -30,7 +30,8 @@ export const useLanguageStore = create<LanguageState>((set, get) => ({
     try {
       // const { data, error } = await supabase.functions.invoke('get-languages');
       // Supabase function invocation returns a response object, data is on response.data
-      const { data: functionResponse, error: functionError } = await supabase.functions.invoke('get-languages');
+      const { data: functionResponse, error: functionError } =
+        await supabase.functions.invoke("get-languages");
 
       if (functionError) {
         throw functionError;
@@ -41,27 +42,27 @@ export const useLanguageStore = create<LanguageState>((set, get) => ({
 
       if (!languages) {
         // This case handles if the 'languages' key is missing or functionResponse itself is null/undefined
-        console.error('No languages data found in function response:', functionResponse);
-        throw new Error('No languages data returned from the server.');
+        console.error(
+          "No languages data found in function response:",
+          functionResponse
+        );
+        throw new Error("No languages data returned from the server.");
       }
 
       set({ languages, loading: false, hasFetched: true, error: null });
     } catch (error: any) {
-      console.error('Error fetching languages:', error);
+      console.error("Error fetching languages:", error);
       set({ error: error.message, loading: false, hasFetched: false }); // Set hasFetched to false to allow retrying
     }
   },
 }));
 
 // Optional: Log store changes for debugging (remove in production)
-useLanguageStore.subscribe(
-  (state, prevState) => {
-    console.log('Language store changed:', state);
-    if (state.error !== prevState.error && state.error) {
-      console.error("Language store error:", state.error);
-    }
+useLanguageStore.subscribe((state, prevState) => {
+  if (state.error !== prevState.error && state.error) {
+    console.error("Language store error:", state.error);
   }
-);
+});
 
 // Example of how to initialize the Supabase client if you don't have one
 // You would typically have this in a separate file like `src/supabaseClient.ts`

@@ -16,7 +16,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Plus, Trash2, Sparkles, BookPlus, Loader2, RefreshCw, Languages } from "lucide-react"; // Added BookPlus, Loader2, RefreshCw, Languages
+import {
+  ArrowLeft,
+  Plus,
+  Trash2,
+  Sparkles,
+  BookPlus,
+  Loader2,
+  RefreshCw,
+  Languages,
+} from "lucide-react"; // Added BookPlus, Loader2, RefreshCw, Languages
 import { Switch } from "@/components/ui/switch"; // Added Switch
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -53,7 +62,9 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
   const [storyId, setStoryId] = useState<string | null>(null);
   const [isCreatingStory, setIsCreatingStory] = useState(false);
   const [isReGeneratingStory, setIsReGeneratingStory] = useState(false); // New state for re-generation
-  const [translatingWords, setTranslatingWords] = useState<Set<number>>(new Set());
+  const [translatingWords, setTranslatingWords] = useState<Set<number>>(
+    new Set()
+  );
 
   // Language store integration
   const {
@@ -134,13 +145,20 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
 
   const generateVocabularyMutation = useMutation({
     mutationFn: async () => {
+      const languageYouKnowName = languages.find(
+        (lang) => lang.code === languageYouKnow
+      )?.name;
+      const languageToLearnName = languages.find(
+        (lang) => lang.code === languageToLearn
+      )?.name;
+
       const { data, error } = await supabase.functions.invoke(
         "generate-vocabulary",
         {
           body: {
             topic,
-            languageYouKnow,
-            languageToLearn,
+            languageYouKnow: `${languageYouKnowName} (${languageYouKnow})`, // Include name and code
+            languageToLearn: `${languageToLearnName} (${languageToLearn})`, // Include name and code
             wordCount: aiWordCount,
           },
         }
@@ -279,7 +297,7 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
     },
     onSuccess: ({ translation, index }) => {
       updateWordPair(index, "translation", translation);
-      setTranslatingWords(prev => {
+      setTranslatingWords((prev) => {
         const newSet = new Set(prev);
         newSet.delete(index);
         return newSet;
@@ -290,7 +308,7 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
       });
     },
     onError: (error: any, { index }) => {
-      setTranslatingWords(prev => {
+      setTranslatingWords((prev) => {
         const newSet = new Set(prev);
         newSet.delete(index);
         return newSet;
@@ -323,7 +341,7 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
       return;
     }
 
-    setTranslatingWords(prev => new Set(prev).add(index));
+    setTranslatingWords((prev) => new Set(prev).add(index));
     translateWordMutation.mutate({ word, index });
   };
 
@@ -467,7 +485,10 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
         .eq("story_id", storyId);
 
       if (deleteBitsError) {
-        throw new StoryGenerationError(`Failed to delete old story bits: ${deleteBitsError.message}`, "DELETE_OLD_BITS_FAILED");
+        throw new StoryGenerationError(
+          `Failed to delete old story bits: ${deleteBitsError.message}`,
+          "DELETE_OLD_BITS_FAILED"
+        );
       }
 
       const { error: deleteStoryError } = await supabase
@@ -476,10 +497,16 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
         .eq("id", storyId);
 
       if (deleteStoryError) {
-        throw new StoryGenerationError(`Failed to delete old story: ${deleteStoryError.message}`, "DELETE_OLD_STORY_FAILED");
+        throw new StoryGenerationError(
+          `Failed to delete old story: ${deleteStoryError.message}`,
+          "DELETE_OLD_STORY_FAILED"
+        );
       }
 
-      toast({ title: "Old story deleted", description: "Proceeding to generate a new one."});
+      toast({
+        title: "Old story deleted",
+        description: "Proceeding to generate a new one.",
+      });
 
       const newStoryId = await generateAndSaveStory(vocabularyId); // This needs to be the updated one
       if (newStoryId) {
@@ -488,8 +515,12 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
           description: "Your new story has been successfully generated.",
         });
         setStoryId(newStoryId); // Update local state
-        queryClient.invalidateQueries({ queryKey: ["vocabulariesWithStories"] });
-        queryClient.invalidateQueries({ queryKey: ["vocabularyWithStory", vocabularyId] });
+        queryClient.invalidateQueries({
+          queryKey: ["vocabulariesWithStories"],
+        });
+        queryClient.invalidateQueries({
+          queryKey: ["vocabularyWithStory", vocabularyId],
+        });
         queryClient.invalidateQueries({ queryKey: ["storyBits", newStoryId] }); // Invalidate new story bits
         queryClient.invalidateQueries({ queryKey: ["storyBits", storyId] }); // Invalidate old story bits just in case
       }
@@ -513,7 +544,6 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
     }
   };
 
-
   if (isLoadingVocabulary || isLoadingWords) {
     return (
       <div className="flex justify-center items-center h-64">
@@ -528,7 +558,11 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
         <Button
           variant="outline"
           onClick={onBack}
-          disabled={updateVocabularyMutation.isPending || isCreatingStory || isReGeneratingStory}
+          disabled={
+            updateVocabularyMutation.isPending ||
+            isCreatingStory ||
+            isReGeneratingStory
+          }
         >
           <ArrowLeft className="h-4 w-4 mr-2" />
           Back
@@ -555,7 +589,9 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                   placeholder="e.g., Basic French"
                   required
                   disabled={
-                    updateVocabularyMutation.isPending || isCreatingStory || isReGeneratingStory
+                    updateVocabularyMutation.isPending ||
+                    isCreatingStory ||
+                    isReGeneratingStory
                   }
                 />
               </div>
@@ -568,7 +604,9 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                   placeholder="e.g., basic-words"
                   required
                   disabled={
-                    updateVocabularyMutation.isPending || isCreatingStory || isReGeneratingStory
+                    updateVocabularyMutation.isPending ||
+                    isCreatingStory ||
+                    isReGeneratingStory
                   }
                 />
               </div>
@@ -581,7 +619,9 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                   checked={isPublic}
                   onCheckedChange={setIsPublic}
                   disabled={
-                    updateVocabularyMutation.isPending || isCreatingStory || isReGeneratingStory
+                    updateVocabularyMutation.isPending ||
+                    isCreatingStory ||
+                    isReGeneratingStory
                   }
                 />
                 <Label htmlFor="is-public">Make vocabulary public</Label>
@@ -595,26 +635,37 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                   value={languageToLearn}
                   onValueChange={setLanguageToLearn}
                   disabled={
-                      updateVocabularyMutation.isPending || isCreatingStory || languagesLoading || isReGeneratingStory
+                    updateVocabularyMutation.isPending ||
+                    isCreatingStory ||
+                    languagesLoading ||
+                    isReGeneratingStory
                   }
                 >
                   <SelectTrigger>
-                      {languagesLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      ) : (
-                        <SelectValue placeholder="Select language to learn" />
-                      )}
+                    {languagesLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <SelectValue placeholder="Select language to learn" />
+                    )}
                   </SelectTrigger>
                   <SelectContent>
-                       {languagesError && <SelectItem value="error" disabled>{languagesError}</SelectItem>}
-                       {!languagesLoading && !languagesError && languages.length === 0 && (
-                        <SelectItem value="no-langs" disabled>No languages available</SelectItem>
-                       )}
-                       {languages.map((lang) => (
-                        <SelectItem key={lang.code} value={lang.code}>
-                          {lang.name}
+                    {languagesError && (
+                      <SelectItem value="error" disabled>
+                        {languagesError}
+                      </SelectItem>
+                    )}
+                    {!languagesLoading &&
+                      !languagesError &&
+                      languages.length === 0 && (
+                        <SelectItem value="no-langs" disabled>
+                          No languages available
                         </SelectItem>
-                       ))}
+                      )}
+                    {languages.map((lang) => (
+                      <SelectItem key={lang.code} value={lang.code}>
+                        {lang.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -624,26 +675,37 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                   value={languageYouKnow}
                   onValueChange={setLanguageYouKnow}
                   disabled={
-                      updateVocabularyMutation.isPending || isCreatingStory || languagesLoading || isReGeneratingStory
+                    updateVocabularyMutation.isPending ||
+                    isCreatingStory ||
+                    languagesLoading ||
+                    isReGeneratingStory
                   }
                 >
                   <SelectTrigger>
-                      {languagesLoading ? (
-                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                      ) : (
-                        <SelectValue placeholder="Select language you know" />
-                      )}
+                    {languagesLoading ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <SelectValue placeholder="Select language you know" />
+                    )}
                   </SelectTrigger>
                   <SelectContent>
-                      {languagesError && <SelectItem value="error" disabled>{languagesError}</SelectItem>}
-                      {!languagesLoading && !languagesError && languages.length === 0 && (
-                        <SelectItem value="no-langs" disabled>No languages available</SelectItem>
-                      )}
-                      {languages.map((lang) => (
-                        <SelectItem key={lang.code} value={lang.code}>
-                          {lang.name}
+                    {languagesError && (
+                      <SelectItem value="error" disabled>
+                        {languagesError}
+                      </SelectItem>
+                    )}
+                    {!languagesLoading &&
+                      !languagesError &&
+                      languages.length === 0 && (
+                        <SelectItem value="no-langs" disabled>
+                          No languages available
                         </SelectItem>
-                      ))}
+                      )}
+                    {languages.map((lang) => (
+                      <SelectItem key={lang.code} value={lang.code}>
+                        {lang.name}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>
@@ -664,7 +726,8 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                       disabled={
                         updateVocabularyMutation.isPending ||
                         generateVocabularyMutation.isPending ||
-                        isCreatingStory || isReGeneratingStory
+                        isCreatingStory ||
+                        isReGeneratingStory
                       }
                     />
                     <Button
@@ -675,7 +738,8 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                       disabled={
                         updateVocabularyMutation.isPending ||
                         generateVocabularyMutation.isPending ||
-                        isCreatingStory || isReGeneratingStory
+                        isCreatingStory ||
+                        isReGeneratingStory
                       }
                     >
                       <Sparkles className="h-4 w-4 mr-2" />
@@ -690,7 +754,9 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                     size="sm"
                     onClick={addWordPair}
                     disabled={
-                      updateVocabularyMutation.isPending || isCreatingStory || isReGeneratingStory
+                      updateVocabularyMutation.isPending ||
+                      isCreatingStory ||
+                      isReGeneratingStory
                     }
                   >
                     <Plus className="h-4 w-4 mr-2" />
@@ -701,7 +767,7 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
 
               <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
                 {wordPairs.map((pair, index) => (
-                <div key={index} className="flex space-x-2 items-center">
+                  <div key={index} className="flex space-x-2 items-center">
                     <Input
                       placeholder="Word"
                       value={pair.word}
@@ -710,7 +776,9 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                       }
                       className="flex-1"
                       disabled={
-                        updateVocabularyMutation.isPending || isCreatingStory || isReGeneratingStory
+                        updateVocabularyMutation.isPending ||
+                        isCreatingStory ||
+                        isReGeneratingStory
                       }
                     />
                     <Button
@@ -740,7 +808,9 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                       }
                       className="flex-1"
                       disabled={
-                        updateVocabularyMutation.isPending || isCreatingStory || isReGeneratingStory
+                        updateVocabularyMutation.isPending ||
+                        isCreatingStory ||
+                        isReGeneratingStory
                       }
                     />
                     {wordPairs.length > 1 && (
@@ -750,7 +820,9 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                         size="sm"
                         onClick={() => removeWordPair(index)}
                         disabled={
-                          updateVocabularyMutation.isPending || isCreatingStory || isReGeneratingStory
+                          updateVocabularyMutation.isPending ||
+                          isCreatingStory ||
+                          isReGeneratingStory
                         }
                       >
                         <Trash2 className="h-4 w-4" />
@@ -766,7 +838,8 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
               className="w-full"
               disabled={
                 updateVocabularyMutation.isPending ||
-                isCreatingStory || isReGeneratingStory ||
+                isCreatingStory ||
+                isReGeneratingStory ||
                 wordPairs.filter((p) => p.word && p.translation).length === 0
               }
             >
@@ -776,13 +849,16 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
             </Button>
           </form>
         </CardContent>
-        <CardFooter className="flex flex-col items-center pt-6 border-t space-y-4"> {/* Added space-y-4 for button spacing */}
+        <CardFooter className="flex flex-col items-center pt-6 border-t space-y-4">
+          {" "}
+          {/* Added space-y-4 for button spacing */}
           {!storyId && ( // Show Create Story button only if no storyId
             <Button
               onClick={handleCreateStory}
               className="w-full md:w-auto"
               disabled={
-                isCreatingStory || isReGeneratingStory ||
+                isCreatingStory ||
+                isReGeneratingStory ||
                 updateVocabularyMutation.isPending ||
                 wordPairs.filter((p) => p.word && p.translation).length === 0
               }
@@ -802,7 +878,11 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                 onClick={handleReGenerateStory}
                 variant="outline" // Different variant for distinction
                 className="w-full md:w-auto"
-                disabled={isReGeneratingStory || isCreatingStory || updateVocabularyMutation.isPending}
+                disabled={
+                  isReGeneratingStory ||
+                  isCreatingStory ||
+                  updateVocabularyMutation.isPending
+                }
               >
                 <RefreshCw className="h-4 w-4 mr-2" />
                 {isReGeneratingStory
