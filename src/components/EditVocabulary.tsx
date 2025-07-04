@@ -16,7 +16,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Plus, Trash2, Sparkles, BookPlus, Loader2, RefreshCw } from "lucide-react"; // Added BookPlus, Loader2, RefreshCw
+import { ArrowLeft, Plus, Trash2, Sparkles, BookPlus, Loader2, RefreshCw, Languages } from "lucide-react"; // Added BookPlus, Loader2, RefreshCw, Languages
 import { Switch } from "@/components/ui/switch"; // Added Switch
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -53,6 +53,7 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
   const [storyId, setStoryId] = useState<string | null>(null);
   const [isCreatingStory, setIsCreatingStory] = useState(false);
   const [isReGeneratingStory, setIsReGeneratingStory] = useState(false); // New state for re-generation
+  const [translatingWords, setTranslatingWords] = useState<Set<number>>(new Set());
 
   // Language store integration
   const {
@@ -255,6 +256,76 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
       });
     },
   });
+
+  const translateWordMutation = useMutation({
+    mutationFn: async ({ word, index }: { word: string; index: number }) => {
+      if (!languageToLearn || !languageYouKnow) {
+        throw new Error("Languages not selected");
+      }
+
+      const { data, error } = await supabase.functions.invoke(
+        "translate-word",
+        {
+          body: {
+            word,
+            sourceLanguage: languageToLearn, // Word is in language to learn
+            targetLanguage: languageYouKnow, // Translate to language you know
+          },
+        }
+      );
+
+      if (error) throw error;
+      return { translation: data.translation, index };
+    },
+    onSuccess: ({ translation, index }) => {
+      updateWordPair(index, "translation", translation);
+      setTranslatingWords(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(index);
+        return newSet;
+      });
+      toast({
+        title: "Translation Complete",
+        description: "Word translated successfully!",
+      });
+    },
+    onError: (error: any, { index }) => {
+      setTranslatingWords(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(index);
+        return newSet;
+      });
+      toast({
+        title: "Translation Failed",
+        description: error.message || "Failed to translate word",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleTranslateWord = (index: number) => {
+    const word = wordPairs[index].word.trim();
+    if (!word) {
+      toast({
+        title: "Error",
+        description: "Please enter a word before translating.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!languageYouKnow || !languageToLearn) {
+      toast({
+        title: "Error",
+        description: "Please select both languages before translating.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setTranslatingWords(prev => new Set(prev).add(index));
+    translateWordMutation.mutate({ word, index });
+  };
 
   const handleGenerateWithAI = () => {
     if (!topic.trim()) {
@@ -630,7 +701,7 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
 
               <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
                 {wordPairs.map((pair, index) => (
-                  <div key={index} className="flex space-x-2 items-center">
+                <div key={index} className="flex space-x-2 items-center">
                     <Input
                       placeholder="Word"
                       value={pair.word}
@@ -653,6 +724,25 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                         updateVocabularyMutation.isPending || isCreatingStory || isReGeneratingStory
                       }
                     />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => handleTranslateWord(index)}
+                      disabled={
+                        updateVocabularyMutation.isPending ||
+                        isCreatingStory ||
+                        isReGeneratingStory ||
+                        translatingWords.has(index) ||
+                        !pair.word.trim()
+                      }
+                    >
+                      {translatingWords.has(index) ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Languages className="h-4 w-4" />
+                      )}
+                    </Button>
                     {wordPairs.length > 1 && (
                       <Button
                         type="button"
