@@ -1,5 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getEnvVariable, corsHeaders } from "../_shared/common-lib.ts";
+import { corsHeaders, getEnvVariable } from "../_shared/common-lib.ts";
 
 Deno.serve(async (req) => {
   // This is needed if you're planning to invoke your function from a browser.
@@ -20,7 +20,7 @@ Deno.serve(async (req) => {
         global: {
           headers: { Authorization: req.headers.get("Authorization")! },
         },
-      }
+      },
     );
 
     // Fetch languages from the 'languages' table.

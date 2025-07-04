@@ -1,7 +1,7 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { getEnvVariable, corsHeaders } from "../_shared/common-lib.ts";
+import { corsHeaders, getEnvVariable } from "../_shared/common-lib.ts";
 
 function transliterate(str) {
   const normalizedNFD = str
@@ -34,14 +34,15 @@ async function generateVocabularyImage(sourceLanguage, targetLanguage, topic) {
       body: JSON.stringify({
         instances: [
           {
-            prompt: `Generate an image that visually represents vocabulary with the topic "${topic}" in ${sourceLanguage} language with their translations to ${targetLanguage}. The image should be educational and visually appealing, suitable for a language learning context.`,
+            prompt:
+              `Generate an image that visually represents vocabulary with the topic "${topic}" in ${sourceLanguage} language with their translations to ${targetLanguage}. The image should be educational and visually appealing, suitable for a language learning context.`,
           },
         ],
         parameters: {
           sampleCount: 1,
         },
       }),
-    }
+    },
   );
   if (!imagenResponse.ok) {
     const errorBody = await imagenResponse.json().catch(() => null); // safely parse JSON
@@ -55,7 +56,7 @@ async function generateVocabularyImage(sourceLanguage, targetLanguage, topic) {
       "Invalid response from Imagen API: " +
         imagenResponse.statusText +
         "\n" +
-        JSON.stringify(imagenData, null, 2)
+        JSON.stringify(imagenData, null, 2),
     );
   }
   let imageContent;
@@ -82,9 +83,11 @@ async function generateVocabularyImage(sourceLanguage, targetLanguage, topic) {
   //   throw new Error("Failed to read image data");
   // }
   let coverImageUrl;
-  const fileName = `${transliterate(
-    `covers/${sourceLanguage}_${targetLanguage}_${topic}`
-  )}.png`;
+  const fileName = `${
+    transliterate(
+      `covers/${sourceLanguage}_${targetLanguage}_${topic}`,
+    )
+  }.png`;
   try {
     coverImageUrl = await uploadToStorage(fileName, imageContent, "image/png");
   } catch (e) {
@@ -96,7 +99,7 @@ async function generateVocabularyImage(sourceLanguage, targetLanguage, topic) {
 async function uploadToStorage(filePath, data, contentType) {
   const supabaseClient = createClient(
     getEnvVariable("SUPABASE_URL") ?? "",
-    getEnvVariable("SUPABASE_SERVICE_ROLE_KEY") ?? ""
+    getEnvVariable("SUPABASE_SERVICE_ROLE_KEY") ?? "",
   );
   const { error: storageError } = await supabaseClient.storage
     .from(getEnvVariable("BUCKET_NAME"))
@@ -129,7 +132,8 @@ serve(async (req) => {
       wordCount = 10,
     } = await req.json();
     const apiKey = getEnvVariable("GEMINI_API_KEY");
-    const prompt = `Generate ${wordCount} vocabulary words for the topic "${topic}" in ${languageToLearn} language with their translations to ${languageYouKnow}. 
+    const prompt =
+      `Generate ${wordCount} vocabulary words for the topic "${topic}" in ${languageToLearn} language with their translations to ${languageYouKnow}. 
     
     Return the response as a JSON array where each object has this exact structure:
     {
@@ -165,7 +169,7 @@ serve(async (req) => {
             },
           },
         }),
-      }
+      },
     );
     if (!response.ok) {
       const errorBody = await response.json().catch(() => null); // safely parse JSON
@@ -188,7 +192,7 @@ serve(async (req) => {
       coverImageUrl = await generateVocabularyImage(
         languageToLearn,
         languageYouKnow,
-        topic
+        topic,
       );
     } catch (e) {
       console.error("Error generating vocabulary image:", e);
@@ -205,7 +209,7 @@ serve(async (req) => {
           ...corsHeaders,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
   } catch (error) {
     console.error("Error in generate-vocabulary function:", error);
@@ -219,7 +223,7 @@ serve(async (req) => {
           ...corsHeaders,
           "Content-Type": "application/json",
         },
-      }
+      },
     );
   }
 });
