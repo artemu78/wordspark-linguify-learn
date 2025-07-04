@@ -1,19 +1,26 @@
 import { supabase } from "@/integrations/supabase/client";
-import { TablesInsert, Tables } from "@/integrations/supabase/types";
-import { generateStoryFromWords, GeminiGenerationError, GeminiStoryBit } from "./geminiUtils"; // Added import
+import { Tables, TablesInsert } from "@/integrations/supabase/types";
+import {
+  GeminiGenerationError,
+  GeminiStoryBit,
+  generateStoryFromWords,
+} from "./geminiUtils"; // Added import
 
 export class StoryGenerationError extends Error {
-  constructor(message: string, public code?: string, public originalError?: any) { // Added originalError
+  constructor(
+    message: string,
+    public code?: string,
+    public originalError?: any,
+  ) { // Added originalError
     super(message);
     this.name = "StoryGenerationError";
   }
 }
 
 export const generateAndSaveStory = async (
-  vocabularyId: string
+  vocabularyId: string,
   // vocabularyTitle is no longer passed as it will be fetched
 ): Promise<string> => { // Returns storyId on success, throws StoryGenerationError on failure
-
   // 1. Fetch vocabulary details (including title and languages)
   const { data: vocabulary, error: vocabError } = await supabase
     .from("vocabularies")
@@ -23,7 +30,10 @@ export const generateAndSaveStory = async (
 
   if (vocabError) {
     console.error("Error fetching vocabulary details:", vocabError);
-    throw new StoryGenerationError(`Failed to fetch vocabulary details: ${vocabError.message}`, "FETCH_VOCAB_FAILED");
+    throw new StoryGenerationError(
+      `Failed to fetch vocabulary details: ${vocabError.message}`,
+      "FETCH_VOCAB_FAILED",
+    );
   }
   if (!vocabulary) {
     throw new StoryGenerationError("Vocabulary not found.", "VOCAB_NOT_FOUND");
@@ -34,23 +44,70 @@ export const generateAndSaveStory = async (
   const languageYouKnow = vocabulary.source_language;
   const languageToLearn = vocabulary.target_language;
 
+  // Validate languages BEFORE try-catch for Gemini
+  if (!languageYouKnow || !languageToLearn) {
+    throw new StoryGenerationError(
+      "Language you know or language to learn not found for the vocabulary. Cannot generate story.",
+      "LANGUAGES_MISSING",
+    );
+  }
+
   // 2. Fetch all vocabulary words
   const { data: words, error: wordsError } = await supabase
     .from("vocabulary_words")
     .select("id, word, translation") // translation can be useful for context or future features
     .eq("vocabulary_id", vocabularyId);
-    // Removed limit(5) to fetch all words
+  // Removed limit(5) to fetch all words
 
   if (wordsError) {
     console.error("Error fetching words for story:", wordsError);
-    throw new StoryGenerationError(`Failed to fetch words: ${wordsError.message}`, "FETCH_WORDS_FAILED");
+    throw new StoryGenerationError(
+      `Failed to fetch words: ${wordsError.message}`,
+      "FETCH_WORDS_FAILED",
+    );
   }
 
   if (!words || words.length === 0) {
-    throw new StoryGenerationError("Cannot generate a story for a vocabulary with no words.", "NO_WORDS_FOUND");
+    throw new StoryGenerationError(
+      "Cannot generate a story for a vocabulary with no words.",
+      "NO_WORDS_FOUND",
+    );
   }
 
-  // 3. Create Story Entry in Supabase
+  // 3. Generate story using Gemini
+  let geminiStoryBits: GeminiStoryBit[];
+  try {
+    // Prepare words for Gemini.
+    const wordsForGemini = words.map((w) => ({
+      word: w.word,
+      translation: w.translation,
+    }));
+
+    // Languages are already validated before this try block.
+    geminiStoryBits = await generateStoryFromWords(
+      wordsForGemini,
+      vocabularyTitle,
+      languageYouKnow!,
+      languageToLearn!,
+    ); // Use non-null assertion as they are validated
+  } catch (error: any) {
+    console.error("Error generating story via Edge Function (Gemini):", error);
+    if (error instanceof GeminiGenerationError) {
+      // Propagate Gemini-specific errors (now from Edge Function call) with more context
+      throw new StoryGenerationError(
+        `Story generation service failed: ${error.message}`,
+        "STORY_SERVICE_FAILED",
+        error.details,
+      );
+    }
+    throw new StoryGenerationError(
+      `Failed to generate story content: ${error.message}`,
+      "STORY_CONTENT_GENERATION_FAILED",
+      error,
+    );
+  }
+
+  // 4. Create Story Entry in Supabase
   const storyTitle = `${vocabularyTitle} - AI Story`; // Updated title to reflect AI generation
   const storyInsert: TablesInsert<"stories"> = {
     vocabulary_id: vocabularyId,
@@ -65,35 +122,16 @@ export const generateAndSaveStory = async (
 
   if (storyError) {
     console.error("Error creating story entry:", storyError);
-    throw new StoryGenerationError(`Failed to create story entry: ${storyError.message}`, "STORY_CREATION_FAILED");
+    throw new StoryGenerationError(
+      `Failed to create story entry: ${storyError.message}`,
+      "STORY_CREATION_FAILED",
+    );
   }
   if (!newStory) {
-    throw new StoryGenerationError("Failed to create story entry (no data returned).", "STORY_CREATION_NO_ID");
-  }
-
-  // 4. Generate story using Gemini
-  let geminiStoryBits: GeminiStoryBit[];
-  try {
-    // Prepare words for Gemini. Ensure sourceLanguage and targetLanguage are available.
-    // The current `words` objects from Supabase have `word` and `translation`.
-    // `generateStoryFromWords` expects an array of objects with at least a `word` property.
-    const wordsForGemini = words.map(w => ({ word: w.word, translation: w.translation }));
-
-    if (!languageYouKnow || !languageToLearn) {
-        throw new StoryGenerationError(
-            "Language you know or language to learn not found for the vocabulary. Cannot generate story.",
-            "LANGUAGES_MISSING"
-        );
-    }
-
-    geminiStoryBits = await generateStoryFromWords(wordsForGemini, vocabularyTitle, languageYouKnow, languageToLearn, newStory.id);
-  } catch (error: any) {
-    console.error("Error generating story via Edge Function (Gemini):", error);
-    if (error instanceof GeminiGenerationError) {
-      // Propagate Gemini-specific errors (now from Edge Function call) with more context
-      throw new StoryGenerationError(`Story generation service failed: ${error.message}`, "STORY_SERVICE_FAILED", error.details);
-    }
-    throw new StoryGenerationError(`Failed to generate story content: ${error.message}`, "STORY_CONTENT_GENERATION_FAILED", error);
+    throw new StoryGenerationError(
+      "Failed to create story entry (no data returned).",
+      "STORY_CREATION_NO_ID",
+    );
   }
 
   // 5. Create Story Bits in Supabase using Gemini response
@@ -106,18 +144,19 @@ export const generateAndSaveStory = async (
     (geminiBit, index) => {
       // It's important to ensure the 'word' from Gemini response is one of the original words
       // and is in the source language. The prompt guides Gemini to do this.
-      const originalWordEntry = words.find(w => w.word === geminiBit.word);
+      const originalWordEntry = words.find((w) => w.word === geminiBit.word);
 
       return {
         story_id: newStory.id,
         sequence_number: index + 1,
         word: geminiBit.word, // This is the word in languageYouKnow
         sentence: geminiBit.storyBitDescription, // This is the story part in languageToLearn
-        sentence_language_you_know: geminiBit.storyBitDescriptionInLanguageYouKnow, // New field
+        sentence_language_you_know:
+          geminiBit.storyBitDescriptionInLanguageYouKnow, // New field
         image_prompt: geminiBit.imagePrompt, // The prompt for image generation
         image_url: "/placeholder.svg", // Using a public placeholder, image generation is separate
       };
-    }
+    },
   );
 
   const { error: bitsError } = await supabase
@@ -129,9 +168,15 @@ export const generateAndSaveStory = async (
     try {
       await supabase.from("stories").delete().eq("id", newStory.id);
     } catch (cleanupError) {
-      console.error("Failed to cleanup story after bits insertion failure:", cleanupError);
+      console.error(
+        "Failed to cleanup story after bits insertion failure:",
+        cleanupError,
+      );
     }
-    throw new StoryGenerationError(`Failed to insert story bits: ${bitsError.message}`, "BITS_INSERTION_FAILED");
+    throw new StoryGenerationError(
+      `Failed to insert story bits: ${bitsError.message}`,
+      "BITS_INSERTION_FAILED",
+    );
   }
 
   return newStory.id;

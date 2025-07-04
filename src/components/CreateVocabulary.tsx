@@ -661,6 +661,7 @@ const CreateVocabulary = ({ onBack, onStartLearning, onPlayStory }: CreateVocabu
                           !languageToLearn
                         }
                         title="Translate word"
+                          data-testid={`translate-word-${index}`}
                       >
                         {translatingWords.has(index) ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -684,6 +685,7 @@ const CreateVocabulary = ({ onBack, onStartLearning, onPlayStory }: CreateVocabu
                           size="sm"
                           onClick={() => removeWordPair(index)}
                           disabled={createVocabularyMutation.isPending}
+                          data-testid={`remove-word-pair-${index}`}
                         >
                           <Trash2 className="h-4 w-4" />
                         </Button>
