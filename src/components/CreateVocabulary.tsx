@@ -10,7 +10,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { ArrowLeft, Plus, Trash2, Sparkles, BookPlus, Loader2 } from "lucide-react"; // Added BookPlus, Loader2
+import { ArrowLeft, Plus, Trash2, Sparkles, BookPlus, Loader2, Languages } from "lucide-react"; // Added BookPlus, Loader2, Languages
 import { Switch } from "@/components/ui/switch"; // Added Switch
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
@@ -96,6 +96,7 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
   );
   const [isCreatingStory, setIsCreatingStory] = useState(false);
   const [storyCreated, setStoryCreated] = useState(false);
+  const [translatingWords, setTranslatingWords] = useState<Set<number>>(new Set());
 
   const generateVocabularyMutation = useMutation({
     mutationFn: async () => {
@@ -126,6 +127,52 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
       toast({
         title: "Error",
         description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const translateWordMutation = useMutation({
+    mutationFn: async ({ word, index }: { word: string; index: number }) => {
+      if (!languageToLearn || !languageYouKnow) {
+        throw new Error("Languages not selected");
+      }
+
+      const { data, error } = await supabase.functions.invoke(
+        "translate-word",
+        {
+          body: {
+            word,
+            sourceLanguage: languageToLearn, // Word is in language to learn
+            targetLanguage: languageYouKnow, // Translate to language you know
+          },
+        }
+      );
+
+      if (error) throw error;
+      return { translation: data.translation, index };
+    },
+    onSuccess: ({ translation, index }) => {
+      updateWordPair(index, "translation", translation);
+      setTranslatingWords(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(index);
+        return newSet;
+      });
+      toast({
+        title: "Translation Complete",
+        description: "Word translated successfully!",
+      });
+    },
+    onError: (error: any, { index }) => {
+      setTranslatingWords(prev => {
+        const newSet = new Set(prev);
+        newSet.delete(index);
+        return newSet;
+      });
+      toast({
+        title: "Translation Failed",
+        description: error.message || "Failed to translate word",
         variant: "destructive",
       });
     },
@@ -192,6 +239,30 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
       });
     },
   });
+
+  const handleTranslateWord = (index: number) => {
+    const word = wordPairs[index].word.trim();
+    if (!word) {
+      toast({
+        title: "Error",
+        description: "Please enter a word before translating.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!languageYouKnow || !languageToLearn) {
+      toast({
+        title: "Error",
+        description: "Please select both languages before translating.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setTranslatingWords(prev => new Set(prev).add(index));
+    translateWordMutation.mutate({ word, index });
+  };
 
   const handleGenerateWithAI = () => {
     if (!topic.trim()) {
@@ -523,6 +594,26 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
                         className="flex-1"
                         disabled={createVocabularyMutation.isPending}
                       />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        onClick={() => handleTranslateWord(index)}
+                        disabled={
+                          createVocabularyMutation.isPending ||
+                          translatingWords.has(index) ||
+                          !pair.word.trim() ||
+                          !languageYouKnow ||
+                          !languageToLearn
+                        }
+                        title="Translate word"
+                      >
+                        {translatingWords.has(index) ? (
+                          <Loader2 className="h-4 w-4 animate-spin" />
+                        ) : (
+                          <Languages className="h-4 w-4" />
+                        )}
+                      </Button>
                       <Input
                         placeholder="Translation"
                         value={pair.translation}
