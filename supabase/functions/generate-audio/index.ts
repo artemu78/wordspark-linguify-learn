@@ -16,7 +16,7 @@ const getEnvVariable = (varName: string) => {
 };
 
 const ELEVENLABS_VOICE_ID = "9BWtsMINqrJLrRacOk9x";
-const ELEVENLABS_MODEL_ID = "eleven_multilingual_v2";
+const ELEVENLABS_MODEL_ID = "eleven_flash_v2_5";
 function transliterate(str) {
   const normalizedNFD = str
     .normalize("NFD")
@@ -87,6 +87,7 @@ serve(async (req) => {
         body: JSON.stringify({
           text: word,
           model_id: ELEVENLABS_MODEL_ID,
+          language_code: languageCode,
         }),
       }
     );

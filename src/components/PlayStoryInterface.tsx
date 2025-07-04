@@ -1,10 +1,23 @@
 import React, { useState, useEffect, useRef } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
-import { ArrowLeft, ChevronLeft, ChevronRight, RotateCcw, BookOpen, Volume2 } from "lucide-react";
+import {
+  ArrowLeft,
+  ChevronLeft,
+  ChevronRight,
+  RotateCcw,
+  BookOpen,
+  Volume2,
+} from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Card,
+  CardContent,
+  CardFooter,
+  CardHeader,
+  CardTitle,
+} from "@/components/ui/card";
 import { Tables } from "@/integrations/supabase/types";
 
 type StoryBit = Tables<"story_bits">;
@@ -22,6 +35,7 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
   vocabularyTitle, // This might become redundant if fetched with story details, but keep for now
   onBack,
 }) => {
+  const queryClient = useQueryClient();
   const [currentBitIndex, setCurrentBitIndex] = useState(0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
@@ -29,7 +43,10 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
   const { toast } = useToast();
 
   // 1. Fetch the story to get vocabulary_id
-  const { data: storyData, isLoading: isLoadingStory } = useQuery<{id: string, vocabulary_id: string} | null, Error>({
+  const { data: storyData, isLoading: isLoadingStory } = useQuery<
+    { id: string; vocabulary_id: string } | null,
+    Error
+  >({
     queryKey: ["story", storyId],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -45,7 +62,15 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
   const vocabularyId = storyData?.vocabulary_id;
 
   // 2. Fetch all words and translations for the vocabulary
-  const { data: vocabularyWords, isLoading: isLoadingVocabWords } = useQuery<{id: string, word: string, translation: string, audio_url?: string | null}[], Error>({
+  const { data: vocabularyWords, isLoading: isLoadingVocabWords } = useQuery<
+    {
+      id: string;
+      word: string;
+      translation: string;
+      audio_url?: string | null;
+    }[],
+    Error
+  >({
     queryKey: ["vocabularyWords", vocabularyId],
     queryFn: async () => {
       if (!vocabularyId) return []; // Should not happen if story loads and has vocab_id
@@ -59,23 +84,7 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
     enabled: !!vocabularyId, // Only run if vocabularyId is fetched
   });
 
-  // Helper function to render the description with the target word bolded
-  const renderDescriptionWithBoldWord = (description: string, wordToBold: string) => {
-    if (!description || !wordToBold) {
-      return description;
-    }
-    // Regex to find the whole word, case-insensitive.
-    // \b matches word boundaries to avoid matching parts of other words.
-    const parts = description.split(new RegExp(`(\\b${wordToBold}\\b)`, 'gi'));
-    return parts.map((part, index) =>
-      part.toLowerCase() === wordToBold.toLowerCase() ? (
-        <strong key={index} className="text-indigo-700">{part}</strong>
-      ) : (
-        part
-      )
-    );
-  };
-
+  // 3. Fetch story bits for the current story
   const {
     data: storyBits,
     isLoading: isLoadingStoryBits,
@@ -100,6 +109,28 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
 
   const currentBit = storyBits?.[currentBitIndex];
 
+  // Helper function to render the description with the target word bolded
+  const renderDescriptionWithBoldWord = (
+    description: string,
+    wordToBold: string
+  ) => {
+    if (!description || !wordToBold) {
+      return description;
+    }
+    // Regex to find the whole word, case-insensitive.
+    // \b matches word boundaries to avoid matching parts of other words.
+    const parts = description.split(new RegExp(`(\\b${wordToBold}\\b)`, "gi"));
+    return parts.map((part, index) =>
+      part.toLowerCase() === wordToBold.toLowerCase() ? (
+        <strong key={index} className="text-indigo-700">
+          {part}
+        </strong>
+      ) : (
+        part
+      )
+    );
+  };
+
   const handleNext = () => {
     if (storyBits && currentBitIndex < storyBits.length - 1) {
       setCurrentBitIndex(currentBitIndex + 1);
@@ -121,11 +152,13 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
 
     setIsAudioLoading(true);
     setAudioUrl(null);
-    
+
     // Check if the vocabulary word already has audio_url
-    const vocabularyWord = vocabularyWords?.find(vw => vw.word === currentBit.word);
+    const vocabularyWord = vocabularyWords?.find(
+      (vw) => vw.word === currentBit.word
+    );
     let urlToPlay = vocabularyWord?.audio_url;
-    
+
     try {
       if (!urlToPlay) {
         // Get languageYouKnow from vocabulary details
@@ -169,6 +202,9 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
               updateResponse.error
             );
           }
+          queryClient.invalidateQueries({
+            queryKey: ["vocabularyWords", vocabularyId],
+          }); // Invalidate the vocabularyWords query to refresh data
         }
       }
 
@@ -200,11 +236,15 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
   if (storyBitsError) {
     return (
       <div className="flex flex-col items-center justify-center h-screen p-4 text-center">
-        <h2 className="text-xl font-semibold text-red-600 mb-2">Error Loading Story</h2>
+        <h2 className="text-xl font-semibold text-red-600 mb-2">
+          Error Loading Story
+        </h2>
         <p className="text-gray-700 mb-4">
           There was a problem fetching the story. Please try again later.
         </p>
-        <p className="text-sm text-gray-500 mb-6">Error: {storyBitsError.message}</p>
+        <p className="text-sm text-gray-500 mb-6">
+          Error: {storyBitsError.message}
+        </p>
         <Button onClick={onBack} variant="outline">
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Dashboard
@@ -216,8 +256,10 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
   if (!storyBits || storyBits.length === 0) {
     return (
       <div className="flex flex-col items-center justify-center h-screen p-4 text-center">
-         <BookOpen className="h-16 w-16 text-gray-400 mb-6" />
-        <h2 className="text-xl font-semibold text-gray-700 mb-2">Story Not Found</h2>
+        <BookOpen className="h-16 w-16 text-gray-400 mb-6" />
+        <h2 className="text-xl font-semibold text-gray-700 mb-2">
+          Story Not Found
+        </h2>
         <p className="text-gray-600 mb-6">
           No bits found for this story, or the story is empty.
         </p>
@@ -262,7 +304,11 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
                     {currentBit.word}
                     {vocabularyWords && vocabularyWords.length > 0 && (
                       <span className="text-xl text-gray-500 ml-2">
-                        ({vocabularyWords.find(vw => vw.word === currentBit.word)?.translation || "Translation not found"})
+                        (
+                        {vocabularyWords.find(
+                          (vw) => vw.word === currentBit.word
+                        )?.translation || "Translation not found"}
+                        )
                       </span>
                     )}
                   </p>
@@ -274,19 +320,32 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
                     aria-label="Listen to word"
                   >
                     <Volume2
-                      className={`h-6 w-6 ${isAudioLoading ? "animate-spin" : ""}`}
+                      className={`h-6 w-6 ${
+                        isAudioLoading ? "animate-spin" : ""
+                      }`}
                     />
                   </Button>
                 </div>
-                <p className="text-lg text-gray-700 leading-relaxed mb-2"> {/* mb-2 to add space before the next language bit */}
-                  {renderDescriptionWithBoldWord(currentBit.sentence, currentBit.word)}
+                <p className="text-lg text-gray-700 leading-relaxed mb-2">
+                  {" "}
+                  {/* mb-2 to add space before the next language bit */}
+                  {renderDescriptionWithBoldWord(
+                    currentBit.sentence,
+                    currentBit.word
+                  )}
                 </p>
                 {currentBit.sentence_language_you_know && (
                   <div className="mt-4 pt-4 border-t border-gray-200">
-                    <p className="text-sm text-gray-500 mb-1">In language you know:</p> {/* Simple label */}
+                    <p className="text-sm text-gray-500 mb-1">
+                      In language you know:
+                    </p>{" "}
+                    {/* Simple label */}
                     <p className="text-md text-gray-600 leading-relaxed">
                       {/* We might not need to bold the word here, or use its translation if available */}
-                      {renderDescriptionWithBoldWord(currentBit.sentence_language_you_know, currentBit.word)}
+                      {renderDescriptionWithBoldWord(
+                        currentBit.sentence_language_you_know,
+                        currentBit.word
+                      )}
                     </p>
                   </div>
                 )}
@@ -306,7 +365,9 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
               <ChevronLeft className="mr-2 h-4 w-4" />
               Previous
             </Button>
-            <div className="text-sm text-gray-600 px-2 whitespace-nowrap"> {/* Page counter */}
+            <div className="text-sm text-gray-600 px-2 whitespace-nowrap">
+              {" "}
+              {/* Page counter */}
               {currentBitIndex + 1} of {storyBits.length}
             </div>
             <Button
@@ -319,7 +380,11 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
               <ChevronRight className="ml-2 h-4 w-4" />
             </Button>
           </div>
-          <Button onClick={handleRestart} variant="ghost" className="text-indigo-600 hover:text-indigo-700 mt-4">
+          <Button
+            onClick={handleRestart}
+            variant="ghost"
+            className="text-indigo-600 hover:text-indigo-700 mt-4"
+          >
             <RotateCcw className="mr-2 h-4 w-4" />
             Restart Story
           </Button>
