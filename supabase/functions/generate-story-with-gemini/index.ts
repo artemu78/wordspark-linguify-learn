@@ -3,17 +3,19 @@ import {
   HarmCategory,
   HarmBlockThreshold,
 } from "https://esm.sh/@google/generative-ai@0.11.3"; // Using ESM import for Deno
+import { corsHeaders, getEnvVariable } from "../_shared/common-lib.ts";
+import { uploadStoryBitsToS3 } from "./queue-to-s3.ts"; // Import the S3 upload function
 
 // Helper function to return JSON response
 const jsonResponse = (data: any, status: number = 200) => {
   return new Response(JSON.stringify(data), {
     status: status,
-    headers: {
-      "Content-Type": "application/json",
-      "Access-Control-Allow-Origin": "*", // Or your specific client domain
-      "Access-Control-Allow-Headers":
-        "authorization, x-client-info, apikey, content-type",
-    },
+    headers: Object.assign(
+      {
+        "Access-Control-Allow-Methods": "POST, OPTIONS",
+      },
+      corsHeaders
+    ),
   });
 };
 
@@ -42,17 +44,17 @@ interface GeminiStoryBit {
   imagePrompt: string;
 }
 
-Deno.serve(async (req: Request) => {
+serve(async (req: Request) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, {
       status: 204, // No Content
-      headers: {
-        "Access-Control-Allow-Origin": "*", // Or your specific client domain
-        "Access-Control-Allow-Methods": "POST, OPTIONS",
-        "Access-Control-Allow-Headers":
-          "authorization, x-client-info, apikey, content-type",
-      },
+      headers: Object.assign(
+        {
+          "Access-Control-Allow-Methods": "POST, OPTIONS",
+        },
+        corsHeaders
+      ),
     });
   }
 
@@ -82,7 +84,7 @@ Deno.serve(async (req: Request) => {
     );
   }
 
-  const apiKey = Deno.env.get("GEMINI_API_KEY");
+  const apiKey = getEnvVariable("GEMINI_API_KEY");
   if (!apiKey) {
     return errorResponse(
       "GEMINI_API_KEY is not set in environment variables.",
@@ -218,6 +220,18 @@ Deno.serve(async (req: Request) => {
         );
       }
     });
+
+    const storyBitsForS3 = parsedResponse.map((bit, i) => ({
+      sceneId: `scene-${i + 1}`,
+      imagePrompt: bit.imagePrompt,
+    }));
+
+    try {
+      const s3Url = await uploadStoryBitsToS3(storyBitsForS3);
+      console.log("✅ Image prompts uploaded to:", s3Url);
+    } catch (err) {
+      console.error("❌ Failed to upload story prompts to S3:", err);
+    }
 
     return jsonResponse(parsedResponse);
   } catch (error: any) {

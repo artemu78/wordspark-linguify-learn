@@ -1,11 +1,8 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
+import { getEnvVariable, corsHeaders } from "../_shared/common-lib.ts";
+
 function transliterate(str) {
   const normalizedNFD = str
     .normalize("NFD")
@@ -23,13 +20,7 @@ function transliterate(str) {
   const latinOnly = normalizedNFKC.replace(/[^a-zA-Z0-9]/g, "");
   return latinOnly;
 }
-const getEnvVariable = (varName) => {
-  const value = Deno.env.get(varName);
-  if (!value) {
-    throw new Error(`Environment variable ${varName} is not set`);
-  }
-  return value;
-};
+
 // Call gemini API to generate vocabulary image
 async function generateVocabularyImage(sourceLanguage, targetLanguage, topic) {
   const apiKey = getEnvVariable("GEMINI_API_KEY");

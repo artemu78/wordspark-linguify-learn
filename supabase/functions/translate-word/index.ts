@@ -1,19 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers":
-    "authorization, x-client-info, apikey, content-type",
-};
-
-const getEnvVariable = (varName: string) => {
-  const value = Deno.env.get(varName);
-  if (!value) {
-    throw new Error(`Environment variable ${varName} is not set`);
-  }
-  return value;
-};
+import { getEnvVariable, corsHeaders } from "../_shared/common-lib.ts";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -23,18 +10,16 @@ serve(async (req) => {
   }
 
   try {
-    const {
-      word,
-      sourceLanguage,
-      targetLanguage,
-    } = await req.json();
+    const { word, sourceLanguage, targetLanguage } = await req.json();
 
     if (!word || !sourceLanguage || !targetLanguage) {
-      throw new Error("Missing required parameters: word, sourceLanguage, targetLanguage");
+      throw new Error(
+        "Missing required parameters: word, sourceLanguage, targetLanguage"
+      );
     }
 
     const apiKey = getEnvVariable("GEMINI_API_KEY");
-    
+
     const prompt = `Translate the word "${word}" from ${sourceLanguage} to ${targetLanguage}. 
     
     Return only the translation, no other text or explanation. Just the translated word.`;
