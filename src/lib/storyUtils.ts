@@ -34,6 +34,14 @@ export const generateAndSaveStory = async (
   const languageYouKnow = vocabulary.source_language;
   const languageToLearn = vocabulary.target_language;
 
+  // Validate languages BEFORE try-catch for Gemini
+  if (!languageYouKnow || !languageToLearn) {
+      throw new StoryGenerationError(
+          "Language you know or language to learn not found for the vocabulary. Cannot generate story.",
+          "LANGUAGES_MISSING"
+      );
+  }
+
   // 2. Fetch all vocabulary words
   const { data: words, error: wordsError } = await supabase
     .from("vocabulary_words")
@@ -53,19 +61,11 @@ export const generateAndSaveStory = async (
   // 3. Generate story using Gemini
   let geminiStoryBits: GeminiStoryBit[];
   try {
-    // Prepare words for Gemini. Ensure sourceLanguage and targetLanguage are available.
-    // The current `words` objects from Supabase have `word` and `translation`.
-    // `generateStoryFromWords` expects an array of objects with at least a `word` property.
+    // Prepare words for Gemini.
     const wordsForGemini = words.map(w => ({ word: w.word, translation: w.translation }));
 
-    if (!languageYouKnow || !languageToLearn) {
-        throw new StoryGenerationError(
-            "Language you know or language to learn not found for the vocabulary. Cannot generate story.",
-            "LANGUAGES_MISSING"
-        );
-    }
-
-    geminiStoryBits = await generateStoryFromWords(wordsForGemini, vocabularyTitle, languageYouKnow, languageToLearn);
+    // Languages are already validated before this try block.
+    geminiStoryBits = await generateStoryFromWords(wordsForGemini, vocabularyTitle, languageYouKnow!, languageToLearn!); // Use non-null assertion as they are validated
   } catch (error: any) {
     console.error("Error generating story via Edge Function (Gemini):", error);
     if (error instanceof GeminiGenerationError) {
