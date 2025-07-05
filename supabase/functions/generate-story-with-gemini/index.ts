@@ -140,7 +140,7 @@ Deno.serve(async (req: Request) => {
       1.  "word": The specific vocabulary word (from the provided list, in ${languageYouKnow}) that is central to this bit.
       2.  "storyBitDescription": A short description of this part of the story (1-2 sentences) IN ${languageToLearn}. This description should naturally incorporate or be about the specified "word".
       3.  "storyBitDescriptionInLanguageYouKnow": The SAME story description, but translated accurately into ${languageYouKnow}.
-      4.  "imagePrompt": A detailed, captivating prompt (in English) for an AI image generator to create an illustration for this story bit. The prompt should describe a scene that visually represents the storyBitDescription (the ${languageToLearn} version). Maintain a consistent artistic style across all image prompts (e.g., "digital painting, vibrant colors, whimsical style" or "Studio Ghibli inspired anime style").
+      4.  "imagePrompt": A detailed, captivating prompt (in English) for an AI image generator to create an illustration for this story bit. The prompt should describe a scene that visually represents the storyBitDescription (the ${languageToLearn} version). Maintain a consistent artistic style across all image prompts (e.g., "digital painting, vibrant colors, whimsical style" or "Studio Ghibli inspired anime style") and keep character consistency among story bits keeping characters detailed description for every story bit.
 
       The output MUST be a valid JSON array of objects, where each object represents a story bit and has the following structure:
       {
