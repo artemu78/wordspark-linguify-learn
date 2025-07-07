@@ -89,6 +89,17 @@ const Dashboard = () => {
     setCurrentView("playStory");
   };
 
+  const handleStartLearning = (vocabularyId: string, vocabularyTitle: string) => {
+    handleSelectVocabulary({
+      id: vocabularyId,
+      title: vocabularyTitle,
+    });
+  };
+
+  const handlePlayStoryFromCreate = (vocabularyId: string, vocabularyTitle: string, storyId: string) => {
+    handlePlayStory(vocabularyId, vocabularyTitle, storyId);
+  };
+
   const handleBackToList = () => {
     setCurrentView("list");
     setSelectedInfo(null);
@@ -118,7 +129,11 @@ const Dashboard = () => {
         )}
 
         {currentView === "create" && (
-          <CreateVocabulary onBack={handleBackToList} />
+          <CreateVocabulary 
+            onBack={handleBackToList}
+            onStartLearning={handleStartLearning}
+            onPlayStory={handlePlayStoryFromCreate}
+          />
         )}
 
         {currentView === "edit" && selectedInfo && (

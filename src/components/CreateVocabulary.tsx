@@ -30,8 +30,8 @@ import { generateAndSaveStory, StoryGenerationError } from "@/lib/storyUtils"; /
 
 interface CreateVocabularyProps {
   onBack: () => void;
-  // Consider if onPlayStory is needed if navigating directly after story creation
-  // onPlayStory?: (vocabularyId: string, vocabularyTitle: string, storyId: string) => void;
+  onStartLearning: (vocabularyId: string, vocabularyTitle: string) => void;
+  onPlayStory: (vocabularyId: string, vocabularyTitle: string, storyId: string) => void;
 }
 
 interface WordPair {
@@ -39,7 +39,7 @@ interface WordPair {
   translation: string;
 }
 
-const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
+const CreateVocabulary = ({ onBack, onStartLearning, onPlayStory }: CreateVocabularyProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -113,6 +113,7 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
   const [createdVocabularyId, setCreatedVocabularyId] = useState<string | null>(
     null
   );
+  const [createdStoryId, setCreatedStoryId] = useState<string | null>(null);
   const [isCreatingStory, setIsCreatingStory] = useState(false);
   const [storyCreated, setStoryCreated] = useState(false);
   const [translatingWords, setTranslatingWords] = useState<Set<number>>(
@@ -412,6 +413,7 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
     try {
       const storyId = await generateAndSaveStory(createdVocabularyId);
       if (storyId) {
+        setCreatedStoryId(storyId);
         toast({
           title: "Story Created!",
           description: "Your story has been successfully generated.",
@@ -709,28 +711,44 @@ const CreateVocabulary = ({ onBack }: CreateVocabularyProps) => {
               <p className="text-green-600 font-semibold">
                 Vocabulary "{title}" saved successfully!
               </p>
-              {storyCreated ? (
-                <p className="text-blue-600">
-                  Story created for this vocabulary.
-                </p>
-              ) : (
+              
+              <div className="flex flex-col md:flex-row gap-2 justify-center">
                 <Button
-                  onClick={handleCreateStory}
+                  onClick={() => onStartLearning(createdVocabularyId, title)}
                   className="w-full md:w-auto"
-                  disabled={isCreatingStory}
                 >
-                  <BookPlus className="h-4 w-4 mr-2" />
-                  {isCreatingStory
-                    ? "Creating Story..."
-                    : "Create Story for this Vocabulary"}
+                  Start Learning
                 </Button>
-              )}
+                
+                {storyCreated && createdStoryId ? (
+                  <Button
+                    onClick={() => onPlayStory(createdVocabularyId, title, createdStoryId)}
+                    variant="secondary"
+                    className="w-full md:w-auto"
+                  >
+                    Play Story
+                  </Button>
+                ) : (
+                  <Button
+                    onClick={handleCreateStory}
+                    variant="outline"
+                    className="w-full md:w-auto"
+                    disabled={isCreatingStory}
+                  >
+                    <BookPlus className="h-4 w-4 mr-2" />
+                    {isCreatingStory
+                      ? "Creating Story..."
+                      : "Create Story"}
+                  </Button>
+                )}
+              </div>
+              
               <Button
-                variant="outline"
+                variant="ghost"
                 onClick={onBack}
                 className="w-full md:w-auto mt-2"
               >
-                Done / Back to List
+                Back to List
               </Button>
             </div>
           )}
