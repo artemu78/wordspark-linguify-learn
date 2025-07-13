@@ -125,6 +125,7 @@ const Dashboard = () => {
             vocabularyTitle={selectedInfo.title}
             vocabularyCoverImageUrl={selectedInfo.vocabularyCoverImageUrl}
             onBack={handleBackToList}
+            onGoToDashboard={handleBackToList}
           />
         )}
 

@@ -3,11 +3,12 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Check, X, RotateCcw, Volume2 } from "lucide-react";
+import { ArrowLeft, Check, X, RotateCcw, Volume2, RefreshCw, Home } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
+import { FireworkAnimation } from "./FireworkAnimation";
 
 interface VocabularyWord {
   id: string;
@@ -21,6 +22,7 @@ interface LearningInterfaceProps {
   vocabularyTitle: string;
   vocabularyCoverImageUrl?: string; // Optional: cover image URL for learning interface
   onBack: () => void;
+  onGoToDashboard?: () => void;
 }
 
 interface ChoiceOption {
@@ -34,6 +36,7 @@ const LearningInterface = ({
   vocabularyTitle,
   vocabularyCoverImageUrl,
   onBack,
+  onGoToDashboard,
 }: LearningInterfaceProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -47,6 +50,8 @@ const LearningInterface = ({
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
+  const [showFireworks, setShowFireworks] = useState(false);
+  const [vocabularyCompleted, setVocabularyCompleted] = useState(false);
 
   // New state for typing challenge
   const [challengeType, setChallengeType] = useState<"choice" | "typing">(
@@ -166,6 +171,10 @@ const LearningInterface = ({
       });
 
       if (error) throw error;
+    },
+    onSuccess: () => {
+      setShowFireworks(true);
+      setVocabularyCompleted(true);
     },
   });
 
@@ -361,10 +370,7 @@ const LearningInterface = ({
 
     if (allFullyCompleted && words.length > 0) {
       checkCompletionMutation.mutate();
-      toast({
-        title: "Congratulations!",
-        description: "You've completed this vocabulary list!",
-      });
+      return; // Don't restart automatically, let user choose
     }
     setCurrentIndex(0); // Restart the vocabulary
   };
@@ -451,6 +457,59 @@ const LearningInterface = ({
     }
   };
 
+  const handleRepeat = async () => {
+    if (!user) return;
+    
+    // Clear all progress for this vocabulary
+    const { error } = await supabase
+      .from("user_progress")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("vocabulary_id", vocabularyId);
+
+    if (error) {
+      toast({
+        title: "Error",
+        description: "Failed to reset progress",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    // Remove completion record
+    await supabase
+      .from("vocabulary_completion")
+      .delete()
+      .eq("user_id", user.id)
+      .eq("vocabulary_id", vocabularyId);
+
+    // Reset component state
+    setVocabularyCompleted(false);
+    setShowFireworks(false);
+    setCurrentIndex(0);
+    setShowResult(false);
+    setSelectedChoice(null);
+    setTypedAnswer("");
+    
+    // Invalidate queries to refetch fresh data
+    queryClient.invalidateQueries({
+      queryKey: ["user-progress", vocabularyId, user?.id],
+    });
+
+    toast({
+      title: "Progress Reset",
+      description: "Starting vocabulary from the beginning!",
+    });
+  };
+
+  const handleLearnMore = () => {
+    if (onGoToDashboard) {
+      onGoToDashboard();
+    } else {
+      onBack();
+    }
+  };
+
   if (words.length === 0) {
     return (
       <div className="text-center py-8">
@@ -474,6 +533,45 @@ const LearningInterface = ({
           Back to Vocabularies
         </Button>
       </div>
+    );
+  }
+
+  if (vocabularyCompleted) {
+    return (
+      <>
+        {showFireworks && (
+          <FireworkAnimation onComplete={() => setShowFireworks(false)} />
+        )}
+        <div className="max-w-4xl mx-auto space-y-6 text-center py-12">
+          <div className="space-y-4">
+            <h1 className="text-4xl font-bold text-green-600 animate-fade-in">
+              🎉 Congratulations! 🎉
+            </h1>
+            <p className="text-xl text-gray-600">
+              You've mastered the "{vocabularyTitle}" vocabulary!
+            </p>
+            <div className="flex justify-center space-x-4 mt-8">
+              <Button
+                onClick={handleRepeat}
+                variant="outline"
+                size="lg"
+                className="px-8"
+              >
+                <RefreshCw className="h-5 w-5 mr-2" />
+                Repeat
+              </Button>
+              <Button
+                onClick={handleLearnMore}
+                size="lg"
+                className="px-8"
+              >
+                <Home className="h-5 w-5 mr-2" />
+                Learn More
+              </Button>
+            </div>
+          </div>
+        </div>
+      </>
     );
   }
 
