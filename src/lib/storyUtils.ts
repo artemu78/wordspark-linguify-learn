@@ -92,8 +92,6 @@ export const generateAndSaveStory = async (
       "Failed to create story entry (no data returned).",
       "STORY_CREATION_NO_ID",
     );
-<<<<<<< HEAD
-=======
   }
 
   // 5. Create Story Bits in Supabase using Gemini response
