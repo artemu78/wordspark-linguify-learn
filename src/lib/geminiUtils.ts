@@ -16,7 +16,7 @@ export interface GeminiStoryBit {
 
 // This error can be used to wrap errors coming from the Edge Function call
 export class GeminiGenerationError extends Error {
-  constructor(message: string, public details?: any) { // Changed originalError to details for broader use
+  constructor(message: string, public details?: typeof Error) { // Changed originalError to details for broader use
     super(message);
     this.name = "GeminiGenerationError";
   }
@@ -27,7 +27,6 @@ export const generateStoryFromWords = async (
   vocabularyTitle: string,
   languageYouKnow: string,
   languageToLearn: string,
-  storyId: string,
 ): Promise<GeminiStoryBit[]> => {
   if (!words || words.length === 0) {
     throw new GeminiGenerationError("No words provided to generate a story.");
@@ -38,7 +37,6 @@ export const generateStoryFromWords = async (
     vocabularyTitle,
     languageYouKnow,
     languageToLearn,
-    storyId,
   };
 
   try {
@@ -75,11 +73,14 @@ export const generateStoryFromWords = async (
     try {
       // Ensure the data is parsed correctly
       data = JSON.parse(dataString);
-    } catch (parseError) {
+    } catch (parseError: unknown) {
+      const errorMessage = parseError instanceof Error
+        ? parseError.message
+        : "Unknown parsing error";
       console.error("Failed to parse response from Edge function:", parseError);
       throw new GeminiGenerationError(
-        `Failed to parse response from story generation service: ${parseError.message}`,
-        parseError,
+        `Failed to parse response from story generation service: ${errorMessage}`,
+        parseError as typeof Error, // Cast to Error for consistency
       );
     }
 
@@ -114,16 +115,15 @@ export const generateStoryFromWords = async (
     });
 
     return data;
-  } catch (error: any) {
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : String(error);
     console.error("Client-side error in generateStoryFromWords:", error);
     if (error instanceof GeminiGenerationError) {
       throw error; // Re-throw if it's already our custom error
     }
     throw new GeminiGenerationError(
-      `An unexpected client-side error occurred: ${
-        error.message || "Unknown client error"
-      }`,
-      error,
+      `An unexpected client-side error occurred: ${errorMessage}`,
+      error as typeof Error,
     );
   }
 };

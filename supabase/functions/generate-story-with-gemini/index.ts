@@ -7,7 +7,7 @@ import { corsHeaders, getEnvVariable } from "../_shared/common-lib.ts";
 // import { uploadStoryBitsToS3 } from "./s3upload.ts";
 
 // Helper function to return JSON response
-const jsonResponse = (data: any, status: number = 200) => {
+const jsonResponse = (data: unknown, status: number = 200) => {
   return new Response(JSON.stringify(data), {
     status: status,
     headers: Object.assign(
@@ -23,7 +23,7 @@ const jsonResponse = (data: any, status: number = 200) => {
 const errorResponse = (
   message: string,
   status: number = 500,
-  details?: any,
+  details?: unknown,
 ) => {
   console.error(
     `[EdgeFunctionError] Status: ${status}, Message: ${message}`,
@@ -70,8 +70,7 @@ Deno.serve(async (req: Request) => {
     return errorResponse("Invalid JSON payload.", 400, message);
   }
 
-  const { words, vocabularyTitle, languageYouKnow, languageToLearn, storyId } =
-    payload;
+  const { words, vocabularyTitle, languageYouKnow, languageToLearn } = payload;
 
   if (
     !Array.isArray(words) ||
