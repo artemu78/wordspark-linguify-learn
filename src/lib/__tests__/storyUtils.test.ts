@@ -85,9 +85,9 @@ describe("generateAndSaveStory", () => {
 
     // Default successful path mocks
     // Define interfaces for chainable mock structures for type safety
-    interface MockSupabaseSingleResponse {
-      data: any;
-      error: any;
+    interface MockSupabaseSingleResponse<T = unknown> {
+      data: T | null;
+      error: { message: string } | null;
     }
     interface MockSupabaseEqChain {
       single: MockedFunction<() => Promise<MockSupabaseSingleResponse>>;
