@@ -1,10 +1,10 @@
 import {
   GoogleGenerativeAI,
-  HarmCategory,
   HarmBlockThreshold,
+  HarmCategory,
 } from "https://esm.sh/@google/generative-ai@0.11.3"; // Using ESM import for Deno
 import { corsHeaders, getEnvVariable } from "../_shared/common-lib.ts";
-import { uploadStoryBitsToS3 } from "./queue-to-s3.ts"; // Import the S3 upload function
+// import { uploadStoryBitsToS3 } from "./s3upload.ts";
 
 // Helper function to return JSON response
 const jsonResponse = (data: any, status: number = 200) => {
@@ -14,7 +14,7 @@ const jsonResponse = (data: any, status: number = 200) => {
       {
         "Access-Control-Allow-Methods": "POST, OPTIONS",
       },
-      corsHeaders
+      corsHeaders,
     ),
   });
 };
@@ -23,11 +23,11 @@ const jsonResponse = (data: any, status: number = 200) => {
 const errorResponse = (
   message: string,
   status: number = 500,
-  details?: any
+  details?: any,
 ) => {
   console.error(
     `[EdgeFunctionError] Status: ${status}, Message: ${message}`,
-    details
+    details,
   );
   return jsonResponse({ error: message, details }, status);
 };
@@ -44,7 +44,7 @@ interface GeminiStoryBit {
   imagePrompt: string;
 }
 
-serve(async (req: Request) => {
+Deno.serve(async (req: Request) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, {
@@ -53,7 +53,7 @@ serve(async (req: Request) => {
         {
           "Access-Control-Allow-Methods": "POST, OPTIONS",
         },
-        corsHeaders
+        corsHeaders,
       ),
     });
   }
@@ -65,11 +65,13 @@ serve(async (req: Request) => {
   let payload;
   try {
     payload = await req.json();
-  } catch (e) {
-    return errorResponse("Invalid JSON payload.", 400, e.message);
+  } catch (e: unknown) {
+    const message = e instanceof Error ? e.message : String(e);
+    return errorResponse("Invalid JSON payload.", 400, message);
   }
 
-  const { words, vocabularyTitle, languageYouKnow, languageToLearn } = payload;
+  const { words, vocabularyTitle, languageYouKnow, languageToLearn, storyId } =
+    payload;
 
   if (
     !Array.isArray(words) ||
@@ -80,7 +82,7 @@ serve(async (req: Request) => {
   ) {
     return errorResponse(
       "Missing required fields in payload: words, vocabularyTitle, languageYouKnow, languageToLearn.",
-      400
+      400,
     );
   }
 
@@ -89,7 +91,7 @@ serve(async (req: Request) => {
     return errorResponse(
       "GEMINI_API_KEY is not set in environment variables.",
       500,
-      "API_KEY_MISSING"
+      "API_KEY_MISSING",
     );
   }
 
@@ -164,48 +166,53 @@ serve(async (req: Request) => {
     });
 
     const response = result.response;
-    const responseText = response.text();
+    const geminiStoryResponseText = response.text();
 
-    if (!responseText) {
+    if (!geminiStoryResponseText) {
       return errorResponse(
         "Received an empty response from Gemini API.",
         500,
-        "GEMINI_EMPTY_RESPONSE"
+        "GEMINI_EMPTY_RESPONSE",
       );
     }
 
-    let parsedResponse: GeminiStoryBit[];
+    let geminiStoryParsedResponse: GeminiStoryBit[];
     try {
-      parsedResponse = JSON.parse(responseText);
-    } catch (parseError: any) {
+      geminiStoryParsedResponse = JSON.parse(geminiStoryResponseText);
+    } catch (parseError: unknown) {
       console.error(
         "Failed to parse Gemini response in Edge Function:",
-        parseError
+        parseError,
       );
       return errorResponse(
-        `Failed to parse JSON response from Gemini. Raw response snippet: ${responseText.substring(
-          0,
-          200
-        )}...`,
+        `Failed to parse JSON response from Gemini. Raw response snippet: ${
+          geminiStoryResponseText.substring(
+            0,
+            300,
+          )
+        }...`,
         500,
         {
-          error: parseError.message,
-          response: responseText.substring(0, 200) + "...",
-        }
+          error: parseError instanceof Error
+            ? parseError.message
+            : String(parseError),
+          response: geminiStoryResponseText.substring(0, 200) + "...",
+        },
       );
     }
 
     if (
-      !Array.isArray(parsedResponse) ||
-      parsedResponse.length !== words.length
+      !Array.isArray(geminiStoryParsedResponse) ||
+      geminiStoryParsedResponse.length !== words.length
     ) {
       return errorResponse(
-        `Gemini response is not a valid array or does not match the expected number of story bits. Expected ${words.length}, got ${parsedResponse.length}.`,
+        `Gemini response is not a valid array or does not match the expected number of story bits. Expected ${words.length}, got ${geminiStoryParsedResponse.length}.`,
         500,
-        "GEMINI_RESPONSE_MISMATCH"
+        "GEMINI_RESPONSE_MISMATCH",
       );
     }
-    parsedResponse.forEach((bit, index) => {
+
+    geminiStoryParsedResponse.forEach((bit, index) => {
       if (
         !bit.word ||
         !bit.storyBitDescription ||
@@ -214,44 +221,75 @@ serve(async (req: Request) => {
       ) {
         // This error will be caught by the main try-catch and returned as a 500
         throw new Error(
-          `Gemini response bit ${index} is missing required fields (word, storyBitDescription, storyBitDescriptionInLanguageYouKnow, or imagePrompt). Bit: ${JSON.stringify(
-            bit
-          )}`
+          `Gemini response bit ${index} is missing required fields (word, storyBitDescription, storyBitDescriptionInLanguageYouKnow, or imagePrompt). Bit: ${
+            JSON.stringify(
+              bit,
+            )
+          }`,
         );
       }
     });
 
-    const storyBitsForS3 = parsedResponse.map((bit, i) => ({
-      sceneId: `scene-${i + 1}`,
-      imagePrompt: bit.imagePrompt,
-    }));
+    // const storyBitsForS3 = geminiStoryParsedResponse.map((bit) => ({
+    //   textToImageParams: {
+    //     text: bit.imagePrompt,
+    //   },
+    // }));
 
-    try {
-      const s3Url = await uploadStoryBitsToS3(storyBitsForS3);
-      console.log("✅ Image prompts uploaded to:", s3Url);
-    } catch (err) {
-      console.error("❌ Failed to upload story prompts to S3:", err);
-    }
+    // let s3Result;
+    // try {
+    //   // const s3Url = await uploadStoryBitsToS3(storyBitsForS3);
+    //   s3Result = await uploadStoryBitsToS3(storyBitsForS3, storyId);
+    //   // console.log("✅ Image prompts uploaded to:", s3Url);
+    //   console.log("✅ Story bits uploaded to S3 successfully.", s3Result);
+    // } catch (err) {
+    //   console.error("❌ Failed to upload story prompts to S3:", err);
+    // }
 
-    return jsonResponse(parsedResponse);
-  } catch (error: any) {
+    // geminiStoryParsedResponse.s3Result = s3Result;
+    return jsonResponse(geminiStoryParsedResponse);
+  } catch (error: unknown) {
     console.error(
       "Error in Supabase Edge Function 'generate-story-with-gemini':",
-      error
+      error,
     );
     // Check for specific Gemini API error structures if available from SDK
     // For example, error.response?.promptFeedback might contain safety-related blocks
-    if (error.message?.includes("SAFETY")) {
+    if (
+      typeof error === "object" &&
+      error !== null &&
+      "message" in error &&
+      typeof (error as { message?: string }).message === "string" &&
+      (error as { message: string }).message.includes("SAFETY")
+    ) {
       return errorResponse(
         "Content generation blocked by Gemini due to safety settings.",
         400, // Bad request, as the prompt might need adjustment
-        { code: "GEMINI_SAFETY_BLOCK", originalError: error.message }
+        {
+          code: "GEMINI_SAFETY_BLOCK",
+          originalError: (error as { message: string }).message,
+        },
       );
     }
     return errorResponse(
-      `An unexpected error occurred: ${error.message || "Unknown error"}`,
+      `An unexpected error occurred: ${
+        typeof error === "object" &&
+          error !== null &&
+          "message" in error &&
+          typeof (error as { message?: string }).message === "string"
+          ? (error as { message: string }).message
+          : "Unknown error"
+      }`,
       500,
-      { code: "EDGE_FUNCTION_UNEXPECTED_ERROR", originalError: error.message }
+      {
+        code: "EDGE_FUNCTION_UNEXPECTED_ERROR",
+        originalError: typeof error === "object" &&
+            error !== null &&
+            "message" in error &&
+            typeof (error as { message?: string }).message === "string"
+          ? (error as { message: string }).message
+          : String(error),
+      },
     );
   }
 });

@@ -50,32 +50,7 @@ export const generateAndSaveStory = async (
     throw new StoryGenerationError("Cannot generate a story for a vocabulary with no words.", "NO_WORDS_FOUND");
   }
 
-  // 3. Generate story using Gemini
-  let geminiStoryBits: GeminiStoryBit[];
-  try {
-    // Prepare words for Gemini. Ensure sourceLanguage and targetLanguage are available.
-    // The current `words` objects from Supabase have `word` and `translation`.
-    // `generateStoryFromWords` expects an array of objects with at least a `word` property.
-    const wordsForGemini = words.map(w => ({ word: w.word, translation: w.translation }));
-
-    if (!languageYouKnow || !languageToLearn) {
-        throw new StoryGenerationError(
-            "Language you know or language to learn not found for the vocabulary. Cannot generate story.",
-            "LANGUAGES_MISSING"
-        );
-    }
-
-    geminiStoryBits = await generateStoryFromWords(wordsForGemini, vocabularyTitle, languageYouKnow, languageToLearn);
-  } catch (error: any) {
-    console.error("Error generating story via Edge Function (Gemini):", error);
-    if (error instanceof GeminiGenerationError) {
-      // Propagate Gemini-specific errors (now from Edge Function call) with more context
-      throw new StoryGenerationError(`Story generation service failed: ${error.message}`, "STORY_SERVICE_FAILED", error.details);
-    }
-    throw new StoryGenerationError(`Failed to generate story content: ${error.message}`, "STORY_CONTENT_GENERATION_FAILED", error);
-  }
-
-  // 4. Create Story Entry in Supabase
+  // 3. Create Story Entry in Supabase
   const storyTitle = `${vocabularyTitle} - AI Story`; // Updated title to reflect AI generation
   const storyInsert: TablesInsert<"stories"> = {
     vocabulary_id: vocabularyId,
@@ -94,6 +69,31 @@ export const generateAndSaveStory = async (
   }
   if (!newStory) {
     throw new StoryGenerationError("Failed to create story entry (no data returned).", "STORY_CREATION_NO_ID");
+  }
+
+  // 4. Generate story using Gemini
+  let geminiStoryBits: GeminiStoryBit[];
+  try {
+    // Prepare words for Gemini. Ensure sourceLanguage and targetLanguage are available.
+    // The current `words` objects from Supabase have `word` and `translation`.
+    // `generateStoryFromWords` expects an array of objects with at least a `word` property.
+    const wordsForGemini = words.map(w => ({ word: w.word, translation: w.translation }));
+
+    if (!languageYouKnow || !languageToLearn) {
+        throw new StoryGenerationError(
+            "Language you know or language to learn not found for the vocabulary. Cannot generate story.",
+            "LANGUAGES_MISSING"
+        );
+    }
+
+    geminiStoryBits = await generateStoryFromWords(wordsForGemini, vocabularyTitle, languageYouKnow, languageToLearn, newStory.id);
+  } catch (error: any) {
+    console.error("Error generating story via Edge Function (Gemini):", error);
+    if (error instanceof GeminiGenerationError) {
+      // Propagate Gemini-specific errors (now from Edge Function call) with more context
+      throw new StoryGenerationError(`Story generation service failed: ${error.message}`, "STORY_SERVICE_FAILED", error.details);
+    }
+    throw new StoryGenerationError(`Failed to generate story content: ${error.message}`, "STORY_CONTENT_GENERATION_FAILED", error);
   }
 
   // 5. Create Story Bits in Supabase using Gemini response
