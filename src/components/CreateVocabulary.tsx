@@ -31,7 +31,11 @@ import { generateAndSaveStory, StoryGenerationError } from "@/lib/storyUtils"; /
 interface CreateVocabularyProps {
   onBack: () => void;
   onStartLearning: (vocabularyId: string, vocabularyTitle: string) => void;
-  onPlayStory: (vocabularyId: string, vocabularyTitle: string, storyId: string) => void;
+  onPlayStory: (
+    vocabularyId: string,
+    vocabularyTitle: string,
+    storyId: string
+  ) => void;
 }
 
 interface WordPair {
@@ -39,7 +43,11 @@ interface WordPair {
   translation: string;
 }
 
-const CreateVocabulary = ({ onBack, onStartLearning, onPlayStory }: CreateVocabularyProps) => {
+const CreateVocabulary = ({
+  onBack,
+  onStartLearning,
+  onPlayStory,
+}: CreateVocabularyProps) => {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -48,12 +56,8 @@ const CreateVocabulary = ({ onBack, onStartLearning, onPlayStory }: CreateVocabu
   );
   const [title, setTitle] = useState("");
   const [topic, setTopic] = useState("");
-  const [languageYouKnow, setLanguageYouKnow] = useState<string | undefined>(
-    undefined
-  ); // Renamed from sourceLanguage
-  const [languageToLearn, setLanguageToLearn] = useState<string | undefined>(
-    undefined
-  ); // Renamed from targetLanguage
+  const [languageYouKnow, setLanguageYouKnow] = useState<string>("");
+  const [languageToLearn, setLanguageToLearn] = useState<string>("");
   const [isPublic, setIsPublic] = useState(false); // Added isPublic state
   const [wordPairs, setWordPairs] = useState<WordPair[]>([
     { word: "", translation: "" },
@@ -76,7 +80,7 @@ const CreateVocabulary = ({ onBack, onStartLearning, onPlayStory }: CreateVocabu
 
   // Effect to set default for languageYouKnow
   useEffect(() => {
-    if (languages.length > 0 && languageYouKnow === undefined) {
+    if (languages.length > 0 && languageYouKnow === "") {
       const defaultUserLang =
         languages.find((lang) => lang.code === "en") || languages[0];
       if (defaultUserLang) {
@@ -87,11 +91,7 @@ const CreateVocabulary = ({ onBack, onStartLearning, onPlayStory }: CreateVocabu
 
   // Effect to set default for languageToLearn
   useEffect(() => {
-    if (
-      languages.length > 0 &&
-      languageYouKnow &&
-      languageToLearn === undefined
-    ) {
+    if (languages.length > 0 && languageYouKnow && languageToLearn === "") {
       const preferredLearnLang = languages.find((lang) => lang.code === "es");
       if (preferredLearnLang && preferredLearnLang.code !== languageYouKnow) {
         setLanguageToLearn(preferredLearnLang.code);
@@ -103,11 +103,11 @@ const CreateVocabulary = ({ onBack, onStartLearning, onPlayStory }: CreateVocabu
         if (fallbackLearnLang) {
           setLanguageToLearn(fallbackLearnLang.code);
         }
-        // If no suitable fallback is found, languageToLearn remains undefined.
+        // If no suitable fallback is found, languageToLearn remains empty.
         // Validation prior to submission will handle this.
       }
     }
-  }, [languages, languageYouKnow, languageToLearn]); // Depends on languages, languageYouKnow, and languageToLearn (to check if it's undefined)
+  }, [languages, languageYouKnow, languageToLearn]); // Depends on languages, languageYouKnow, and languageToLearn (to check if it's empty)
 
   const [aiWordCount, setAiWordCount] = useState(10);
   const [createdVocabularyId, setCreatedVocabularyId] = useState<string | null>(
@@ -661,7 +661,7 @@ const CreateVocabulary = ({ onBack, onStartLearning, onPlayStory }: CreateVocabu
                           !languageToLearn
                         }
                         title="Translate word"
-                          data-testid={`translate-word-${index}`}
+                        data-testid={`translate-word-${index}`}
                       >
                         {translatingWords.has(index) ? (
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -713,7 +713,7 @@ const CreateVocabulary = ({ onBack, onStartLearning, onPlayStory }: CreateVocabu
               <p className="text-green-600 font-semibold">
                 Vocabulary "{title}" saved successfully!
               </p>
-              
+
               <div className="flex flex-col md:flex-row gap-2 justify-center">
                 <Button
                   onClick={() => onStartLearning(createdVocabularyId, title)}
@@ -721,10 +721,12 @@ const CreateVocabulary = ({ onBack, onStartLearning, onPlayStory }: CreateVocabu
                 >
                   Start Learning
                 </Button>
-                
+
                 {storyCreated && createdStoryId ? (
                   <Button
-                    onClick={() => onPlayStory(createdVocabularyId, title, createdStoryId)}
+                    onClick={() =>
+                      onPlayStory(createdVocabularyId, title, createdStoryId)
+                    }
                     variant="secondary"
                     className="w-full md:w-auto"
                   >
@@ -738,13 +740,11 @@ const CreateVocabulary = ({ onBack, onStartLearning, onPlayStory }: CreateVocabu
                     disabled={isCreatingStory}
                   >
                     <BookPlus className="h-4 w-4 mr-2" />
-                    {isCreatingStory
-                      ? "Creating Story..."
-                      : "Create Story"}
+                    {isCreatingStory ? "Creating Story..." : "Create Story"}
                   </Button>
                 )}
               </div>
-              
+
               <Button
                 variant="ghost"
                 onClick={onBack}

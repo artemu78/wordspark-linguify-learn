@@ -1,13 +1,9 @@
 import React from "react";
-import { render, screen, fireEvent, waitFor } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import CreateVocabulary from "../CreateVocabulary";
-import { supabase } from "@/integrations/supabase/client"; // Auto-mocked
-import { useAuth } from "@/contexts/AuthContext";
-import { useLanguageStore } from "@/stores/languageStore";
-import { useToast } from "@/hooks/use-toast";
 import { generateAndSaveStory } from "@/lib/storyUtils";
-import { vi } from "vitest";
+import { vi, MockedFunction, Mocked, beforeEach } from "vitest";
 
 // Self-contained mocks for hooks and utils, but Supabase will be globally mocked via setupTests.ts
 // vi.mock('@/integrations/supabase/client', () => { ... }); // REMOVED - Will use global mock
@@ -25,6 +21,10 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useLanguageStore } from "@/stores/languageStore";
 import { useToast } from "@/hooks/use-toast";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -58,12 +58,16 @@ const mockSupabaseClient = supabase as Mocked<typeof supabase>;
 
 describe("CreateVocabulary Component", () => {
   const mockOnBack = vi.fn();
+  const mockOnStartLearning = vi.fn();
+  const mockOnPlayStory = vi.fn();
   const mockToast = vi.fn();
 
   beforeEach(() => {
     vi.clearAllMocks();
 
+    // @ts-expect-error: Mock the supabase client globally
     mockUseAuth.mockReturnValue({ user: { id: "test-user-id" } });
+    // @ts-expect-error: Mock the supabase client globally
     mockUseLanguageStore.mockReturnValue({
       languages: [
         { code: "en", name: "English" },
@@ -75,12 +79,14 @@ describe("CreateVocabulary Component", () => {
       fetchLanguages: vi.fn(),
       hasFetched: true,
     });
+    // @ts-expect-error: Mock the supabase client globally
     mockUseToast.mockReturnValue({ toast: mockToast });
 
     // Reset specific mock implementations for supabase if needed, e.g., for function invokes
     const functionsInvokeMock = supabase.functions.invoke as Mocked<
       typeof supabase.functions.invoke
     >; // Use the imported supabase
+    // @ts-expect-error: Mock the supabase client globally
     functionsInvokeMock.mockImplementation((functionName: string) => {
       if (functionName === "generate-vocabulary") {
         return Promise.resolve({
@@ -106,7 +112,13 @@ describe("CreateVocabulary Component", () => {
   });
 
   test("renders correctly and shows initial form elements", () => {
-    renderWithProviders(<CreateVocabulary onBack={mockOnBack} />);
+    renderWithProviders(
+      <CreateVocabulary
+        onBack={mockOnBack}
+        onPlayStory={mockOnPlayStory}
+        onStartLearning={mockOnStartLearning}
+      />
+    );
 
     expect(screen.getByText("Create New Vocabulary")).toBeInTheDocument();
     expect(screen.getByLabelText("Title")).toBeInTheDocument();
@@ -134,7 +146,13 @@ describe("CreateVocabulary Component", () => {
   // More tests will be added here
   test("updates title, topic, and AI word count on input", async () => {
     const user = userEvent.setup();
-    renderWithProviders(<CreateVocabulary onBack={mockOnBack} />);
+    renderWithProviders(
+      <CreateVocabulary
+        onBack={mockOnBack}
+        onPlayStory={mockOnPlayStory}
+        onStartLearning={mockOnStartLearning}
+      />
+    );
 
     const titleInput = screen.getByLabelText("Title");
     await user.type(titleInput, "My Test Vocab");
@@ -152,7 +170,13 @@ describe("CreateVocabulary Component", () => {
 
   test.skip("updates language selections", async () => {
     const user = userEvent.setup();
-    renderWithProviders(<CreateVocabulary onBack={mockOnBack} />);
+    renderWithProviders(
+      <CreateVocabulary
+        onBack={mockOnBack}
+        onPlayStory={mockOnPlayStory}
+        onStartLearning={mockOnStartLearning}
+      />
+    );
 
     // Language to learn
     // Need to find the select by its placeholder or current value if default is set
@@ -173,7 +197,13 @@ describe("CreateVocabulary Component", () => {
 
   test('toggles "Make vocabulary public" switch', async () => {
     const user = userEvent.setup();
-    renderWithProviders(<CreateVocabulary onBack={mockOnBack} />);
+    renderWithProviders(
+      <CreateVocabulary
+        onBack={mockOnBack}
+        onPlayStory={mockOnPlayStory}
+        onStartLearning={mockOnStartLearning}
+      />
+    );
 
     const publicSwitch = screen.getByLabelText("Make vocabulary public");
     expect(publicSwitch).not.toBeChecked();
@@ -185,7 +215,13 @@ describe("CreateVocabulary Component", () => {
 
   test("adds and removes word pairs", async () => {
     const user = userEvent.setup();
-    renderWithProviders(<CreateVocabulary onBack={mockOnBack} />);
+    renderWithProviders(
+      <CreateVocabulary
+        onBack={mockOnBack}
+        onPlayStory={mockOnPlayStory}
+        onStartLearning={mockOnStartLearning}
+      />
+    );
 
     // Initial state: 1 word pair
     expect(screen.getAllByPlaceholderText("Word")).toHaveLength(1);
@@ -220,7 +256,13 @@ describe("CreateVocabulary Component", () => {
 
   test("updates word and translation in a word pair", async () => {
     const user = userEvent.setup();
-    renderWithProviders(<CreateVocabulary onBack={mockOnBack} />);
+    renderWithProviders(
+      <CreateVocabulary
+        onBack={mockOnBack}
+        onPlayStory={mockOnPlayStory}
+        onStartLearning={mockOnStartLearning}
+      />
+    );
 
     const wordInput = screen.getByPlaceholderText("Word");
     const translationInput = screen.getByPlaceholderText("Translation");
@@ -235,7 +277,13 @@ describe("CreateVocabulary Component", () => {
   describe("AI Word Generation", () => {
     test("successfully generates word pairs with AI", async () => {
       const user = userEvent.setup();
-      renderWithProviders(<CreateVocabulary onBack={mockOnBack} />);
+      renderWithProviders(
+        <CreateVocabulary
+          onBack={mockOnBack}
+          onPlayStory={mockOnPlayStory}
+          onStartLearning={mockOnStartLearning}
+        />
+      );
 
       await user.type(screen.getByLabelText("Topic"), "Animals");
       // Select languages - assuming default or previous test setup handles this if needed for button to be enabled
@@ -274,7 +322,7 @@ describe("CreateVocabulary Component", () => {
 
     test("shows error toast if AI generation fails", async () => {
       const user = userEvent.setup();
-      // @ts-ignore
+      // @ts-expect-error: Mock the supabase client globally
       mockSupabaseClient.functions.invoke.mockImplementationOnce(
         (functionName: string) => {
           if (functionName === "generate-vocabulary") {
@@ -287,7 +335,13 @@ describe("CreateVocabulary Component", () => {
         }
       );
 
-      renderWithProviders(<CreateVocabulary onBack={mockOnBack} />);
+      renderWithProviders(
+        <CreateVocabulary
+          onBack={mockOnBack}
+          onPlayStory={mockOnPlayStory}
+          onStartLearning={mockOnStartLearning}
+        />
+      );
       await user.type(screen.getByLabelText("Topic"), "Food");
       // Ensure languages are selected
       // (Assuming default languages are set by useEffect and store)
@@ -310,7 +364,13 @@ describe("CreateVocabulary Component", () => {
 
     test("shows error toast if topic is missing for AI generation", async () => {
       const user = userEvent.setup();
-      renderWithProviders(<CreateVocabulary onBack={mockOnBack} />);
+      renderWithProviders(
+        <CreateVocabulary
+          onBack={mockOnBack}
+          onPlayStory={mockOnPlayStory}
+          onStartLearning={mockOnStartLearning}
+        />
+      );
 
       const generateButton = screen.getByRole("button", {
         name: /Generate with AI/i,
@@ -334,7 +394,13 @@ describe("CreateVocabulary Component", () => {
   describe("Word Translation", () => {
     test("successfully translates a word", async () => {
       const user = userEvent.setup();
-      renderWithProviders(<CreateVocabulary onBack={mockOnBack} />);
+      renderWithProviders(
+        <CreateVocabulary
+          onBack={mockOnBack}
+          onPlayStory={mockOnPlayStory}
+          onStartLearning={mockOnStartLearning}
+        />
+      );
 
       const wordInput = screen.getByPlaceholderText("Word");
       await user.type(wordInput, "TestWord");
@@ -370,7 +436,7 @@ describe("CreateVocabulary Component", () => {
 
     test("shows error toast if translation fails", async () => {
       const user = userEvent.setup();
-      // @ts-ignore
+      // @ts-expect-error: Mock the supabase client globally
       mockSupabaseClient.functions.invoke.mockImplementationOnce(
         (functionName: string) => {
           if (functionName === "translate-word") {
@@ -383,7 +449,13 @@ describe("CreateVocabulary Component", () => {
         }
       );
 
-      renderWithProviders(<CreateVocabulary onBack={mockOnBack} />);
+      renderWithProviders(
+        <CreateVocabulary
+          onBack={mockOnBack}
+          onPlayStory={mockOnPlayStory}
+          onStartLearning={mockOnStartLearning}
+        />
+      );
       const wordInput = screen.getByPlaceholderText("Word");
       await user.type(wordInput, "AnotherWord");
 
@@ -404,11 +476,18 @@ describe("CreateVocabulary Component", () => {
     test("translate button is disabled if word is empty or languages not selected", async () => {
       const user = userEvent.setup();
       // Scenario 1: Word is empty
-      renderWithProviders(<CreateVocabulary onBack={mockOnBack} />);
+      renderWithProviders(
+        <CreateVocabulary
+          onBack={mockOnBack}
+          onPlayStory={mockOnPlayStory}
+          onStartLearning={mockOnStartLearning}
+        />
+      );
       let translateButton = screen.getByTestId("translate-word-0");
       expect(translateButton).toBeDisabled(); // Word is empty by default
 
       // Scenario 2: Languages not selected (mock language store to have no languages initially)
+      // @ts-expect-error: Mock the supabase client globally
       mockUseLanguageStore.mockReturnValueOnce({
         ...useLanguageStore(), // spread default mock
         languages: [], // no languages loaded
@@ -478,7 +557,13 @@ describe("CreateVocabulary Component", () => {
 
     test("successfully saves a new vocabulary", async () => {
       const user = userEvent.setup();
-      renderWithProviders(<CreateVocabulary onBack={mockOnBack} />);
+      renderWithProviders(
+        <CreateVocabulary
+          onBack={mockOnBack}
+          onPlayStory={mockOnPlayStory}
+          onStartLearning={mockOnStartLearning}
+        />
+      );
       await fillRequiredFields(user);
 
       const mockVocabSingleFn = vi.fn().mockResolvedValue({
@@ -580,7 +665,13 @@ describe("CreateVocabulary Component", () => {
         };
       });
 
-      renderWithProviders(<CreateVocabulary onBack={mockOnBack} />);
+      renderWithProviders(
+        <CreateVocabulary
+          onBack={mockOnBack}
+          onPlayStory={mockOnPlayStory}
+          onStartLearning={mockOnStartLearning}
+        />
+      );
       await fillRequiredFields(user);
       await user.click(
         screen.getByRole("button", { name: /Save Vocabulary/i })
@@ -629,7 +720,13 @@ describe("CreateVocabulary Component", () => {
         );
       });
 
-      renderWithProviders(<CreateVocabulary onBack={mockOnBack} />);
+      renderWithProviders(
+        <CreateVocabulary
+          onBack={mockOnBack}
+          onPlayStory={mockOnPlayStory}
+          onStartLearning={mockOnStartLearning}
+        />
+      );
       await fillRequiredFields(user);
       await user.click(
         screen.getByRole("button", { name: /Save Vocabulary/i })
@@ -648,7 +745,13 @@ describe("CreateVocabulary Component", () => {
 
     test("shows validation error if title or topic is missing", async () => {
       const user = userEvent.setup();
-      renderWithProviders(<CreateVocabulary onBack={mockOnBack} />);
+      renderWithProviders(
+        <CreateVocabulary
+          onBack={mockOnBack}
+          onPlayStory={mockOnPlayStory}
+          onStartLearning={mockOnStartLearning}
+        />
+      );
       // Missing title and topic
       await user.type(screen.getAllByPlaceholderText("Word")[0], "hello");
       await user.type(screen.getAllByPlaceholderText("Translation")[0], "hola");
@@ -667,7 +770,13 @@ describe("CreateVocabulary Component", () => {
 
     test("shows validation error if no word pairs are added", async () => {
       const user = userEvent.setup();
-      renderWithProviders(<CreateVocabulary onBack={mockOnBack} />);
+      renderWithProviders(
+        <CreateVocabulary
+          onBack={mockOnBack}
+          onPlayStory={mockOnPlayStory}
+          onStartLearning={mockOnStartLearning}
+        />
+      );
       await user.type(screen.getByLabelText("Title"), "Test Title");
       await user.type(screen.getByLabelText("Topic"), "Test Topic");
       // No word pairs filled
@@ -688,6 +797,7 @@ describe("CreateVocabulary Component", () => {
       const user = userEvent.setup();
 
       // Mock language store to return undefined for languages initially to test "not selected"
+      // @ts-expect-error: Mock the supabase client globally
       mockUseLanguageStore.mockReturnValueOnce({
         ...useLanguageStore(),
         languages: [{ code: "en", name: "English" }], // Only one language to force same selection
@@ -712,7 +822,13 @@ describe("CreateVocabulary Component", () => {
         );
       });
 
-      renderWithProviders(<CreateVocabulary onBack={mockOnBack} />);
+      renderWithProviders(
+        <CreateVocabulary
+          onBack={mockOnBack}
+          onPlayStory={mockOnPlayStory}
+          onStartLearning={mockOnStartLearning}
+        />
+      );
       await user.type(screen.getByLabelText("Title"), "Lang Test");
       await user.type(screen.getByLabelText("Topic"), "Lang Topic");
       await user.type(screen.getAllByPlaceholderText("Word")[0], "test");
@@ -748,7 +864,13 @@ describe("CreateVocabulary Component", () => {
       // We can achieve this by running the successful save interaction or mocking the component's state.
       // For simplicity, let's simulate a successful save.
       const user = userEvent.setup();
-      renderWithProviders(<CreateVocabulary onBack={mockOnBack} />);
+      renderWithProviders(
+        <CreateVocabulary
+          onBack={mockOnBack}
+          onPlayStory={mockOnPlayStory}
+          onStartLearning={mockOnStartLearning}
+        />
+      );
       await user.type(screen.getByLabelText("Title"), "Story Vocab");
       await user.type(screen.getByLabelText("Topic"), "Story Topic");
       await user.type(screen.getAllByPlaceholderText("Word")[0], "storyword");
@@ -791,6 +913,7 @@ describe("CreateVocabulary Component", () => {
 
     test("successfully creates a story", async () => {
       const user = userEvent.setup();
+      // @ts-expect-error: Mock the supabase client globally
       mockGenerateAndSaveStory.mockResolvedValueOnce("new-story-id");
 
       const createStoryButton = screen.getByRole("button", {
@@ -815,6 +938,7 @@ describe("CreateVocabulary Component", () => {
 
     test("shows error toast if story creation fails", async () => {
       const user = userEvent.setup();
+      // @ts-expect-error: Mock the supabase client globally
       mockGenerateAndSaveStory.mockRejectedValueOnce(
         new Error("Story gen failed")
       );
@@ -838,7 +962,13 @@ describe("CreateVocabulary Component", () => {
 
   test.skip('calls onBack when "Back" or "Done / Back to List" button is clicked', async () => {
     const user = userEvent.setup();
-    renderWithProviders(<CreateVocabulary onBack={mockOnBack} />);
+    renderWithProviders(
+      <CreateVocabulary
+        onBack={mockOnBack}
+        onPlayStory={mockOnPlayStory}
+        onStartLearning={mockOnStartLearning}
+      />
+    );
 
     // Test initial "Back" button
     const backButton = screen.getByRole("button", { name: /Back/i });

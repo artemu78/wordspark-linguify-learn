@@ -1,4 +1,12 @@
-import { Mocked, vi } from "vitest";
+import { Mocked, MockedFunction, vi } from "vitest";
+
+afterEach(() => {
+  vi.clearAllMocks();
+});
+
+vi.setConfig({
+  testTimeout: 5000, // Set a global timeout for tests
+});
 
 // Make this file self-contained for mocking, disabling global mocks from setupTests.ts
 vi.mock("@/integrations/supabase/client", () => {
@@ -196,6 +204,9 @@ describe("generateAndSaveStory", () => {
   // Error handling tests will follow
 
   test("throws StoryGenerationError if fetching vocabulary details fails", async () => {
+    vi.setConfig({
+      testTimeout: 5000, // Increase timeout for this test if needed
+    });
     const mockVocabSingleFn = vi.fn().mockResolvedValue({
       data: null,
       error: { message: "DB error" },
@@ -243,6 +254,9 @@ describe("generateAndSaveStory", () => {
   });
 
   test("throws StoryGenerationError if vocabulary is not found", async () => {
+    vi.setConfig({
+      testTimeout: 5000, // Increase timeout for this test if needed
+    });
     const mockVocabSingleFn = vi.fn().mockResolvedValue({
       data: null,
       error: null,
