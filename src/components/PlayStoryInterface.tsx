@@ -9,6 +9,8 @@ import {
   RotateCcw,
   BookOpen,
   Volume2,
+  Loader2,
+  ImageIcon,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -19,6 +21,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Tables } from "@/integrations/supabase/types";
+import { useStoryImageStatus } from "@/hooks/useStoryImageStatus";
 
 type StoryBit = Tables<"story_bits">;
 type VocabularyWord = Tables<"vocabulary_words">; // For translations
@@ -41,6 +44,9 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
   const [isAudioLoading, setIsAudioLoading] = useState(false);
   const audioRef = useRef<HTMLAudioElement>(null);
   const { toast } = useToast();
+
+  // Track image generation status
+  const { status: imageStatus } = useStoryImageStatus(storyId);
 
   // 1. Fetch the story to get vocabulary_id
   const { data: storyData, isLoading: isLoadingStory } = useQuery<
@@ -283,6 +289,19 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
           <CardTitle className="text-2xl font-bold text-center text-gray-800">
             Story: {vocabularyTitle}
           </CardTitle>
+          {imageStatus && imageStatus.generatingBits > 0 && (
+            <div className="text-center">
+              <div className="text-sm text-gray-600 mb-2">
+                Generating images: {imageStatus.completedBits}/{imageStatus.totalBits} complete
+              </div>
+              <div className="w-full bg-gray-200 rounded-full h-2">
+                <div 
+                  className="bg-indigo-600 h-2 rounded-full transition-all duration-300"
+                  style={{ width: `${imageStatus.progress}%` }}
+                ></div>
+              </div>
+            </div>
+          )}
         </CardHeader>
         <CardContent className="p-6 text-center">
           {currentBit && (
@@ -294,8 +313,21 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
                     alt={`Story bit for ${currentBit.word}`}
                     className="max-h-full max-w-full object-contain"
                   />
+                ) : currentBit.image_generation_status === 'generating' ? (
+                  <div className="flex flex-col items-center justify-center text-gray-500">
+                    <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                    <p className="text-sm">Generating image...</p>
+                  </div>
+                ) : currentBit.image_generation_status === 'failed' ? (
+                  <div className="flex flex-col items-center justify-center text-gray-500">
+                    <ImageIcon className="h-8 w-8 mb-2" />
+                    <p className="text-sm">Image generation failed</p>
+                  </div>
                 ) : (
-                  <div className="text-gray-500">No image available</div>
+                  <div className="flex flex-col items-center justify-center text-gray-500">
+                    <ImageIcon className="h-8 w-8 mb-2" />
+                    <p className="text-sm">No image available</p>
+                  </div>
                 )}
               </div>
               <div>

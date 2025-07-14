@@ -139,6 +139,17 @@ export const generateAndSaveStory = async (
     );
   }
 
+  // 6. Trigger asynchronous image generation
+  try {
+    await supabase.functions.invoke('generate-images-for-story', {
+      body: { storyId: newStory.id }
+    });
+    console.log('Image generation triggered for story:', newStory.id);
+  } catch (imageError) {
+    console.warn('Failed to trigger image generation:', imageError);
+    // Don't throw here - story creation was successful, image generation is optional
+  }
+
   return newStory.id;
 };
 

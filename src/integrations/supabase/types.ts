@@ -14,6 +14,42 @@ export type Database = {
   }
   public: {
     Tables: {
+      image_generation_jobs: {
+        Row: {
+          completed_at: string | null
+          created_at: string
+          error_message: string | null
+          fal_job_id: string
+          id: string
+          image_url: string | null
+          status: string
+          story_bit_id: string
+          webhook_url: string | null
+        }
+        Insert: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          fal_job_id: string
+          id?: string
+          image_url?: string | null
+          status?: string
+          story_bit_id: string
+          webhook_url?: string | null
+        }
+        Update: {
+          completed_at?: string | null
+          created_at?: string
+          error_message?: string | null
+          fal_job_id?: string
+          id?: string
+          image_url?: string | null
+          status?: string
+          story_bit_id?: string
+          webhook_url?: string | null
+        }
+        Relationships: []
+      }
       languages: {
         Row: {
           code: string
@@ -95,6 +131,7 @@ export type Database = {
         Row: {
           created_at: string
           id: string
+          image_generation_status: string | null
           image_prompt: string | null
           image_url: string | null
           sentence: string
@@ -106,6 +143,7 @@ export type Database = {
         Insert: {
           created_at?: string
           id?: string
+          image_generation_status?: string | null
           image_prompt?: string | null
           image_url?: string | null
           sentence: string
@@ -117,6 +155,7 @@ export type Database = {
         Update: {
           created_at?: string
           id?: string
+          image_generation_status?: string | null
           image_prompt?: string | null
           image_url?: string | null
           sentence?: string
