@@ -1,3 +1,4 @@
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import {
   GoogleGenerativeAI,
   HarmBlockThreshold,
@@ -44,7 +45,7 @@ interface GeminiStoryBit {
   imagePrompt: string;
 }
 
-Deno.serve(async (req: Request) => {
+serve(async (req: Request) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
     return new Response(null, {

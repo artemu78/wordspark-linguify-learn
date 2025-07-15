@@ -1,10 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders, getEnvVariable } from "../_shared/common-lib.ts";
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -20,11 +16,11 @@ serve(async (req) => {
     }
 
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      getEnvVariable('SUPABASE_URL') ?? '',
+      getEnvVariable('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
-    const falApiKey = Deno.env.get('FAL_API_KEY')
+    const falApiKey = getEnvVariable('FAL_API_KEY')
     if (!falApiKey) {
       throw new Error('FAL_API_KEY not configured')
     }
@@ -47,14 +43,19 @@ serve(async (req) => {
       })
     }
 
-    const webhookUrl = `${Deno.env.get('SUPABASE_URL')}/functions/v1/fal-webhook-handler`
-    const results = []
+    const webhookUrl = `${getEnvVariable('SUPABASE_URL')}/functions/v1/fal-webhook-handler`
+    const results: {
+      storyBitId: string,
+      status: 'error' | 'submitted',
+      error?: string,
+      requestId?: string
+    }[] = []
 
     // Generate images for each story bit
     for (const storyBit of storyBits) {
       try {
         // Submit job to fal.ai
-        const falResponse = await fetch('https://queue.fal.run/fal-ai/flux-schnell', {
+        const falResponse = await fetch('https://queue.fal.run/fal-ai/flux/dev?fal_webhook=https://mlitptrnqpsnqjciskxg.supabase.co/functions/v1/fal-webhook-handler', {
           method: 'POST',
           headers: {
             'Authorization': `Key ${falApiKey}`,
@@ -62,10 +63,6 @@ serve(async (req) => {
           },
           body: JSON.stringify({
             prompt: storyBit.image_prompt,
-            image_size: 'landscape_4_3',
-            num_inference_steps: 4,
-            enable_safety_checker: true,
-            webhook_url: webhookUrl
           }),
         })
 
