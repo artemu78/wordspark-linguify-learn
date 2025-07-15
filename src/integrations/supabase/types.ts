@@ -48,7 +48,15 @@ export type Database = {
           story_bit_id?: string
           webhook_url?: string | null
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "fk_image_generation_jobs_story_bit_id"
+            columns: ["story_bit_id"]
+            isOneToOne: false
+            referencedRelation: "story_bits"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       languages: {
         Row: {
