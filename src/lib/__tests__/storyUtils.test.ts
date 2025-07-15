@@ -111,7 +111,7 @@ describe("generateAndSaveStory", () => {
     // interface MockSupabaseDeleteChain { eq: MockedFunction<(col: string, val: any) => Promise<{ error: any }>>; }
 
     // No default mockImplementation for supabase.from in beforeEach. Each test will set its own.
-    mockGenerateStoryFromWords.mockResolvedValue(mockGeminiBits); // Default for successful path
+    vi.mocked(mockGenerateStoryFromWords).mockResolvedValue(mockGeminiBits); // Default for successful path
   });
 
   test("successfully generates and saves a story", async () => {
@@ -187,7 +187,7 @@ describe("generateAndSaveStory", () => {
     expect(mockSupabase.from).toHaveBeenCalledWith("story_bits");
     // @ts-ignore
     const storyBitsInsertArg =
-      mockSupabase.from("story_bits").insert.mock.calls[0][0];
+      vi.mocked(mockSupabase.from("story_bits").insert).mock.calls[0][0];
     expect(storyBitsInsertArg).toHaveLength(mockGeminiBits.length);
     expect(storyBitsInsertArg[0]).toEqual(expect.objectContaining({
       story_id: mockNewStoryId,
@@ -239,9 +239,9 @@ describe("generateAndSaveStory", () => {
         } as any;
       });
 
-    mockGenerateStoryFromWords.mockReset().mockResolvedValue([]); // Ensure other parts are quiet
+    vi.mocked(mockGenerateStoryFromWords).mockReset().mockResolvedValue([]); // Ensure other parts are quiet
 
-    await expect(generateAndSaveStory(vocabularyId)).rejects.toThrowError(
+    await expect(generateAndSaveStory(vocabularyId)).rejects.toThrow(
       expect.objectContaining({
         name: "StoryGenerationError",
         code: "FETCH_VOCAB_FAILED",
@@ -294,6 +294,7 @@ describe("generateAndSaveStory", () => {
         };
       }
       if (tableName === "vocabulary_words") {
+        const wordsEqMock = vi.fn().mockResolvedValue({ data: null, error: { message: "Words DB error" } });
         return { select: vi.fn(() => ({ eq: wordsEqMock })) };
       }
       // Strict fallback: if any other table is called, this test's premise is wrong or mock is incomplete.
@@ -315,9 +316,9 @@ describe("generateAndSaveStory", () => {
       } as any;
     });
 
-    mockGenerateStoryFromWords.mockReset().mockResolvedValue([]);
+    vi.mocked(mockGenerateStoryFromWords).mockReset().mockResolvedValue([]);
 
-    await expect(generateAndSaveStory(vocabularyId)).rejects.toThrowError(
+    await expect(generateAndSaveStory(vocabularyId)).rejects.toThrow(
       expect.objectContaining({
         name: "StoryGenerationError",
         code: "FETCH_WORDS_FAILED",
@@ -347,6 +348,7 @@ describe("generateAndSaveStory", () => {
         };
       }
       if (tableName === "vocabulary_words") {
+        const wordsEqMock = vi.fn().mockResolvedValue({ data: [], error: null });
         return { select: vi.fn(() => ({ eq: wordsEqMock })) };
       }
       console.error(
@@ -367,9 +369,9 @@ describe("generateAndSaveStory", () => {
       } as any;
     });
 
-    mockGenerateStoryFromWords.mockReset().mockResolvedValue([]);
+    vi.mocked(mockGenerateStoryFromWords).mockReset().mockResolvedValue([]);
 
-    await expect(generateAndSaveStory(vocabularyId)).rejects.toThrowError(
+    await expect(generateAndSaveStory(vocabularyId)).rejects.toThrow(
       expect.objectContaining({
         name: "StoryGenerationError",
         code: "NO_WORDS_FOUND",
@@ -408,7 +410,7 @@ describe("generateAndSaveStory", () => {
         return {} as any;
       });
     // This specific error is thrown *before* calling geminiUtils, directly within generateAndSaveStory
-    await expect(generateAndSaveStory(vocabularyId)).rejects.toThrowError(
+    await expect(generateAndSaveStory(vocabularyId)).rejects.toThrow(
       expect.objectContaining({
         name: "StoryGenerationError",
         code: "LANGUAGES_MISSING",
@@ -440,12 +442,12 @@ describe("generateAndSaveStory", () => {
         return {} as any;
       });
 
-    mockGenerateStoryFromWords.mockReset(); // Ensure it's clean for this test
-    mockGenerateStoryFromWords.mockRejectedValueOnce(
-      new GeminiGenerationError("Gemini API error", { detail: "some detail" }),
+    vi.mocked(mockGenerateStoryFromWords).mockReset(); // Ensure it's clean for this test
+    vi.mocked(mockGenerateStoryFromWords).mockRejectedValueOnce(
+      new GeminiGenerationError("Gemini API error", { details: "some detail" } as any),
     );
 
-    await expect(generateAndSaveStory(vocabularyId)).rejects.toThrowError(
+    await expect(generateAndSaveStory(vocabularyId)).rejects.toThrow(
       expect.objectContaining({
         name: "StoryGenerationError",
         code: "STORY_SERVICE_FAILED",
@@ -504,10 +506,10 @@ describe("generateAndSaveStory", () => {
       }
       return {} as any;
     });
-    mockGenerateStoryFromWords.mockReset();
-    mockGenerateStoryFromWords.mockResolvedValue(mockGeminiBits);
+    vi.mocked(mockGenerateStoryFromWords).mockReset();
+    vi.mocked(mockGenerateStoryFromWords).mockResolvedValue(mockGeminiBits);
 
-    await expect(generateAndSaveStory(vocabularyId)).rejects.toThrowError(
+    await expect(generateAndSaveStory(vocabularyId)).rejects.toThrow(
       expect.objectContaining({
         name: "StoryGenerationError",
         code: "STORY_CREATION_FAILED",
@@ -561,10 +563,10 @@ describe("generateAndSaveStory", () => {
       }
       return {} as any; // Fallback, should ideally not be hit
     });
-    mockGenerateStoryFromWords.mockReset();
-    mockGenerateStoryFromWords.mockResolvedValue(mockGeminiBits);
+    vi.mocked(mockGenerateStoryFromWords).mockReset();
+    vi.mocked(mockGenerateStoryFromWords).mockResolvedValue(mockGeminiBits);
 
-    await expect(generateAndSaveStory(vocabularyId)).rejects.toThrowError(
+    await expect(generateAndSaveStory(vocabularyId)).rejects.toThrow(
       expect.objectContaining({
         name: "StoryGenerationError",
         code: "BITS_INSERTION_FAILED",

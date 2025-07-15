@@ -1,17 +1,16 @@
 // src/integrations/supabase/__mocks__/client.ts
 import { vi } from 'vitest';
 
-// Drastically simplified mock for stability testing
+// Simplified mock for stability testing
 export const supabase = {
   from: vi.fn(() => ({
-    select: vi.fn((selectString?: string) => ({
+    select: vi.fn().mockReturnValue({
       eq: vi.fn().mockReturnThis(),
       single: vi.fn().mockResolvedValue({ data: { id: 'simplified-single' }, error: null }),
       maybeSingle: vi.fn().mockResolvedValue({ data: { id: 'simplified-maybe' }, error: null }),
       order: vi.fn().mockReturnThis(),
       limit: vi.fn().mockReturnThis(),
-      // Default resolution for select() itself if it's awaited or thenable
-    })).mockResolvedValue({ data: [{ id: 'simplified-select-multi' }], error: null }), // select itself can resolve to an array
+    }),
     insert: vi.fn().mockResolvedValue({ data: [{ id: 'simplified-insert' }], error: null }),
     update: vi.fn(() => ({ // update().eq()
       eq: vi.fn().mockResolvedValue({ data: [{ id: 'simplified-update' }], error: null }), // eq now terminal for simplicity

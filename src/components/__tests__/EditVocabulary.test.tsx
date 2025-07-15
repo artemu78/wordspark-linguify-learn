@@ -108,8 +108,22 @@ describe("EditVocabulary Component", () => {
     vi.clearAllMocks();
     queryClient.clear(); // Clear query cache
 
-    mockUseAuth.mockReturnValue({ user: { id: "test-user-id" } });
-    mockUseLanguageStore.mockReturnValue({
+    vi.mocked(mockUseAuth).mockReturnValue({ 
+      user: { 
+        id: "test-user-id",
+        app_metadata: {},
+        user_metadata: {},
+        aud: "authenticated",
+        created_at: "2023-01-01T00:00:00Z"
+      } as any,
+      session: null,
+      loading: false,
+      signUp: vi.fn(),
+      signIn: vi.fn(),
+      signOut: vi.fn(),
+      signInWithGoogle: vi.fn()
+    });
+    vi.mocked(mockUseLanguageStore).mockReturnValue({
       languages: [
         { code: "en", name: "English" },
         { code: "es", name: "Spanish" },
@@ -120,7 +134,11 @@ describe("EditVocabulary Component", () => {
       fetchLanguages: vi.fn(),
       hasFetched: true,
     });
-    mockUseToast.mockReturnValue({ toast: mockToast });
+    vi.mocked(mockUseToast).mockReturnValue({ 
+      toast: mockToast,
+      dismiss: vi.fn(),
+      toasts: []
+    });
 
     // Default Supabase mocks for EditVocabulary specific to its initial load and basic function calls
     // Individual tests will override `supabase.from` for specific update/delete/insert paths.
@@ -200,7 +218,7 @@ describe("EditVocabulary Component", () => {
     const functionsInvokeMock = supabase.functions.invoke as Mocked<
       typeof supabase.functions.invoke
     >;
-    functionsInvokeMock.mockImplementation((functionName: string) => {
+    vi.mocked(functionsInvokeMock).mockImplementation((functionName: string) => {
       if (functionName === "generate-vocabulary") {
         return Promise.resolve({
           data: {
@@ -754,7 +772,7 @@ describe("EditVocabulary Component", () => {
           .requireActual("@/integrations/supabase/client")
           .supabase.from(tableName);
       });
-      mockGenerateAndSaveStory.mockResolvedValueOnce("new-story-id-from-edit");
+      vi.mocked(mockGenerateAndSaveStory).mockResolvedValueOnce("new-story-id-from-edit");
 
       render(
         <AllTheProviders>
@@ -830,7 +848,7 @@ describe("EditVocabulary Component", () => {
           .requireActual("@/integrations/supabase/client")
           .supabase.from(tableName);
       });
-      mockGenerateAndSaveStory.mockResolvedValueOnce("regenerated-story-id");
+      vi.mocked(mockGenerateAndSaveStory).mockResolvedValueOnce("regenerated-story-id");
 
       render(
         <AllTheProviders>
