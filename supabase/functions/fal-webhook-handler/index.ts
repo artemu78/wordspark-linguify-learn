@@ -1,10 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.7.1'
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-}
+import { corsHeaders, getEnvVariable } from "../_shared/common-lib.ts";
 
 serve(async (req) => {
   // Handle CORS preflight requests
@@ -14,12 +10,11 @@ serve(async (req) => {
 
   try {
     const supabase = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+      getEnvVariable('SUPABASE_URL') ?? '',
+      getEnvVariable('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
     const webhook = await req.json()
-    console.log('Received fal.ai webhook:', webhook)
 
     const { request_id, status } = webhook
     
@@ -35,25 +30,24 @@ serve(async (req) => {
       .single()
 
     if (jobError || !job) {
-      console.error('Job not found:', jobError)
       return new Response(JSON.stringify({ error: 'Job not found' }), {
         status: 404,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       })
     }
 
-    let updateData: any = {
+    const updateData: { status: string; completed_at: string; image_url?: string; error_message?: string } = {
       status,
       completed_at: new Date().toISOString()
     }
 
-    let storyBitUpdate: any = {
+    const storyBitUpdate: { image_generation_status: string; image_url?: string } = {
       image_generation_status: status
     }
 
-    if (status === 'COMPLETED') {
+    if (status === 'OK') {
       // Extract image URL from webhook
-      const imageUrl = webhook.result?.images?.[0]?.url || webhook.result?.image?.url
+      const imageUrl = webhook.payload?.images?.[0]?.url || webhook.payload?.image?.url
       if (imageUrl) {
         updateData.image_url = imageUrl
         storyBitUpdate.image_url = imageUrl
@@ -71,7 +65,6 @@ serve(async (req) => {
       .eq('id', job.id)
 
     if (updateJobError) {
-      console.error('Error updating job:', updateJobError)
       throw updateJobError
     }
 
@@ -82,11 +75,10 @@ serve(async (req) => {
       .eq('id', job.story_bit_id)
 
     if (updateStoryBitError) {
-      console.error('Error updating story bit:', updateStoryBitError)
       throw updateStoryBitError
     }
 
-    console.log(`Successfully processed webhook for job ${request_id}`)
+    console.log(`Successfully processed webhook for job ${request_id} story_bit_id ${job.story_bit_id}`, storyBitUpdate)
 
     return new Response(JSON.stringify({ success: true }), {
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
