@@ -31,12 +31,14 @@ interface PlayStoryInterfaceProps {
   storyId: string;
   vocabularyTitle: string;
   onBack: () => void;
+  onStartLearning: (vocabularyId: string, vocabularyTitle: string) => void;
 }
 
 const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
   storyId,
   vocabularyTitle, // This might become redundant if fetched with story details, but keep for now
   onBack,
+  onStartLearning,
 }) => {
   const queryClient = useQueryClient();
   const [currentBitIndex, setCurrentBitIndex] = useState(0);
@@ -402,15 +404,24 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
               {/* Page counter */}
               {currentBitIndex + 1} of {storyBits.length}
             </div>
-            <Button
-              onClick={handleNext}
-              disabled={currentBitIndex === storyBits.length - 1}
-              variant="outline"
-              className="flex-1" // Allow button to grow
-            >
-              Next
-              <ChevronRight className="ml-2 h-4 w-4" />
-            </Button>
+            {currentBitIndex === storyBits.length - 1 ? (
+              <Button
+                onClick={() => onStartLearning(vocabularyId!, vocabularyTitle)}
+                className="flex-1"
+              >
+                Learn
+              </Button>
+            ) : (
+              <Button
+                onClick={handleNext}
+                disabled={currentBitIndex === storyBits.length - 1}
+                variant="outline"
+                className="flex-1" // Allow button to grow
+              >
+                Next
+                <ChevronRight className="ml-2 h-4 w-4" />
+              </Button>
+            )}
           </div>
           <Button
             onClick={handleRestart}

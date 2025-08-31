@@ -151,6 +151,7 @@ const Dashboard = () => {
               storyId={selectedInfo.storyId}
               vocabularyTitle={selectedInfo.title}
               onBack={handleBackToList}
+              onStartLearning={handleStartLearning}
             />
           )}
       </main>

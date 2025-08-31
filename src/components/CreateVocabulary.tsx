@@ -438,8 +438,9 @@ const CreateVocabulary = ({
       } else {
         toast({
           title: "Story Creation Failed",
-          description: "An unexpected error occurred.",
+          description: "An unexpected error occurred. AI is not stable. Try one more time.",
           variant: "destructive",
+          duration: 10000,
         });
       }
       console.error("Story generation failed:", error);
@@ -721,8 +722,16 @@ const CreateVocabulary = ({
                 >
                   Start Learning
                 </Button>
-
-                {storyCreated && createdStoryId ? (
+                <Button
+                  onClick={handleCreateStory}
+                  variant="outline"
+                  className="w-full md:w-auto"
+                  disabled={isCreatingStory}
+                >
+                  <BookPlus className="h-4 w-4 mr-2" />
+                  {isCreatingStory ? "Creating Story..." : "Create Story"}
+                </Button>
+                {storyCreated && createdStoryId && (
                   <Button
                     onClick={() =>
                       onPlayStory(createdVocabularyId, title, createdStoryId)
@@ -731,16 +740,6 @@ const CreateVocabulary = ({
                     className="w-full md:w-auto"
                   >
                     Play Story
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={handleCreateStory}
-                    variant="outline"
-                    className="w-full md:w-auto"
-                    disabled={isCreatingStory}
-                  >
-                    <BookPlus className="h-4 w-4 mr-2" />
-                    {isCreatingStory ? "Creating Story..." : "Create Story"}
                   </Button>
                 )}
               </div>
