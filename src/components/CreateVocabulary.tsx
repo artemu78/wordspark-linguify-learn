@@ -28,6 +28,8 @@ import { useEffect } from "react"; // Import useEffect
 import { useToast } from "@/hooks/use-toast";
 import { generateAndSaveStory, StoryGenerationError } from "@/lib/storyUtils"; // Added
 
+const STORY_CREATION_ERROR_TOAST_DURATION = 10000;
+
 interface CreateVocabularyProps {
   onBack: () => void;
   onStartLearning: (vocabularyId: string, vocabularyTitle: string) => void;
@@ -440,7 +442,7 @@ const CreateVocabulary = ({
           title: "Story Creation Failed",
           description: "An unexpected error occurred. AI is not stable. Try one more time.",
           variant: "destructive",
-          duration: 10000,
+          duration: STORY_CREATION_ERROR_TOAST_DURATION,
         });
       }
       console.error("Story generation failed:", error);

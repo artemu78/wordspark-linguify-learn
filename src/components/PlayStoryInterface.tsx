@@ -406,7 +406,12 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
             </div>
             {currentBitIndex === storyBits.length - 1 ? (
               <Button
-                onClick={() => onStartLearning(vocabularyId!, vocabularyTitle)}
+                onClick={() => {
+                  if (vocabularyId) {
+                    onStartLearning(vocabularyId, vocabularyTitle);
+                  }
+                }}
+                disabled={!vocabularyId}
                 className="flex-1"
               >
                 Learn
