@@ -139,6 +139,7 @@ serve(async (req: Request) => {
       The story must be broken down into several "bits" or parts. Each bit must prominently feature one of the provided vocabulary words.
       The number of story bits must be exactly equal to the number of words provided (${words.length} words = ${words.length} bits).
       The story bits must flow logically and form a single, connected narrative.
+      The story should follow the classic hero's journey archetype.
 
       For each story bit, you must provide:
       1.  "word": The specific vocabulary word (from the provided list, in ${languageYouKnow}) that is central to this bit.

@@ -28,6 +28,8 @@ import { useEffect } from "react"; // Import useEffect
 import { useToast } from "@/hooks/use-toast";
 import { generateAndSaveStory, StoryGenerationError } from "@/lib/storyUtils"; // Added
 
+const STORY_CREATION_ERROR_TOAST_DURATION = 10000;
+
 interface CreateVocabularyProps {
   onBack: () => void;
   onStartLearning: (vocabularyId: string, vocabularyTitle: string) => void;
@@ -438,8 +440,9 @@ const CreateVocabulary = ({
       } else {
         toast({
           title: "Story Creation Failed",
-          description: "An unexpected error occurred.",
+          description: "An unexpected error occurred. AI is not stable. Try one more time.",
           variant: "destructive",
+          duration: STORY_CREATION_ERROR_TOAST_DURATION,
         });
       }
       console.error("Story generation failed:", error);
@@ -721,8 +724,16 @@ const CreateVocabulary = ({
                 >
                   Start Learning
                 </Button>
-
-                {storyCreated && createdStoryId ? (
+                <Button
+                  onClick={handleCreateStory}
+                  variant="outline"
+                  className="w-full md:w-auto"
+                  disabled={isCreatingStory}
+                >
+                  <BookPlus className="h-4 w-4 mr-2" />
+                  {isCreatingStory ? "Creating Story..." : "Create Story"}
+                </Button>
+                {storyCreated && createdStoryId && (
                   <Button
                     onClick={() =>
                       onPlayStory(createdVocabularyId, title, createdStoryId)
@@ -731,16 +742,6 @@ const CreateVocabulary = ({
                     className="w-full md:w-auto"
                   >
                     Play Story
-                  </Button>
-                ) : (
-                  <Button
-                    onClick={handleCreateStory}
-                    variant="outline"
-                    className="w-full md:w-auto"
-                    disabled={isCreatingStory}
-                  >
-                    <BookPlus className="h-4 w-4 mr-2" />
-                    {isCreatingStory ? "Creating Story..." : "Create Story"}
                   </Button>
                 )}
               </div>
