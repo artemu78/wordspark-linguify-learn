@@ -21,6 +21,7 @@ import {
   Star,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { PostgrestError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
 import { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
@@ -138,7 +139,7 @@ const VocabularyList = ({
         queryKey: ["vocabulariesWithStories", user?.id],
       });
     },
-    onError: (error: any) => {
+    onError: (error: PostgrestError) => {
       toast({
         title: "Error",
         description: error.message || "Failed to update favorite status",
@@ -312,7 +313,7 @@ const VocabularyList = ({
       setDeleteDialogOpen(false);
       setSelectedVocabulary(null);
     },
-    onError: (error: any) => {
+    onError: (error: PostgrestError) => {
       console.error("Delete vocabulary error:", error);
       toast({
         title: "Error",
@@ -360,7 +361,7 @@ const VocabularyList = ({
       setResetDialogOpen(false);
       setSelectedVocabulary(null);
     },
-    onError: (error: any) => {
+    onError: (error: PostgrestError) => {
       console.error("Reset progress error:", error);
       toast({
         title: "Error",

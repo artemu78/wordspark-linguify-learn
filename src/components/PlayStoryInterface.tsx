@@ -328,6 +328,7 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
                       isImageLoading ? "hidden" : ""
                     }`}
                     onLoad={() => setIsImageLoading(false)}
+                    onError={() => setIsImageLoading(false)}
                   />
                 ) : currentBit.image_generation_status === "generating" ? (
                   <div className="flex flex-col items-center justify-center text-gray-500">
