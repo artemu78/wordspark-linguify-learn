@@ -1,0 +1,2 @@
+ALTER TABLE vocabularies
+ADD COLUMN is_favorite BOOLEAN DEFAULT FALSE;

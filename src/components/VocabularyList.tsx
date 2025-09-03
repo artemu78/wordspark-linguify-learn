@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useState, useMemo } from "react";
 import {
   Card,
   CardContent,
@@ -17,11 +17,13 @@ import {
   Edit,
   RotateCcw,
   Trash2,
-  BookOpen, // Added for Play Story button
+  BookOpen,
+  Star,
 } from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { PostgrestError } from "@supabase/supabase-js";
 import { supabase } from "@/integrations/supabase/client";
-import { Tables, TablesInsert } from "@/integrations/supabase/types"; // Added for type safety
+import { Tables, TablesInsert } from "@/integrations/supabase/types";
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -40,6 +42,7 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Input } from "@/components/ui/input";
 
 interface Vocabulary {
   id: string;
@@ -48,9 +51,10 @@ interface Vocabulary {
   source_language: string;
   target_language: string;
   is_default: boolean;
+  is_favorite: boolean;
   word_count?: number;
-  story_id?: string | null; // Added to hold potential story ID
-  cover_image_url?: string; // Optional field for cover image URL
+  story_id?: string | null;
+  cover_image_url?: string;
 }
 
 interface VocabularyListProps {
@@ -78,7 +82,7 @@ const VocabularyList = ({
   const [resetDialogOpen, setResetDialogOpen] = React.useState(false);
   const [selectedVocabulary, setSelectedVocabulary] =
     React.useState<Vocabulary | null>(null);
-  // const [isGeneratingStory, setIsGeneratingStory] = React.useState<string | null>(null); // No longer needed here
+  const [searchQuery, setSearchQuery] = useState("");
 
   const { data: vocabularies = [], isLoading } = useQuery<Vocabulary[]>({
     queryKey: ["vocabulariesWithStories", user?.id], // Include user ID in queryKey
@@ -106,11 +110,44 @@ const VocabularyList = ({
       return data.map((vocab) => ({
         ...vocab,
         word_count: vocab.vocabulary_words?.[0]?.count || 0,
-        story_id: vocab.stories?.[0]?.id || null, // Extract story_id
+        story_id: vocab.stories?.[0]?.id || null,
+        is_favorite: vocab.is_favorite || false,
       }));
     },
-    enabled: !!user, // Ensure user is loaded before fetching
+    enabled: !!user,
   });
+
+  const favoriteMutation = useMutation({
+    mutationFn: async ({
+      vocabularyId,
+      is_favorite,
+    }: {
+      vocabularyId: string;
+      is_favorite: boolean;
+    }) => {
+      const { error } = await supabase
+        .from("vocabularies")
+        .update({ is_favorite })
+        .eq("id", vocabularyId);
+
+      if (error) {
+        throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({
+        queryKey: ["vocabulariesWithStories", user?.id],
+      });
+    },
+    onError: (error: PostgrestError) => {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update favorite status",
+        variant: "destructive",
+      });
+    },
+  });
+
   const { data: userProgress = [] } = useQuery({
     queryKey: ["user-progress-all"],
     queryFn: async () => {
@@ -276,7 +313,7 @@ const VocabularyList = ({
       setDeleteDialogOpen(false);
       setSelectedVocabulary(null);
     },
-    onError: (error: any) => {
+    onError: (error: PostgrestError) => {
       console.error("Delete vocabulary error:", error);
       toast({
         title: "Error",
@@ -324,7 +361,7 @@ const VocabularyList = ({
       setResetDialogOpen(false);
       setSelectedVocabulary(null);
     },
-    onError: (error: any) => {
+    onError: (error: PostgrestError) => {
       console.error("Reset progress error:", error);
       toast({
         title: "Error",
@@ -366,11 +403,8 @@ const VocabularyList = ({
     }
   };
 
-  // Removed generateDummyStory function from here. It's now in src/lib/storyUtils.ts
-
   const handlePlayStoryClick = (vocabulary: Vocabulary) => {
     if (vocabulary.story_id) {
-      // Call the onPlayStory prop with the necessary
       onPlayStory(
         vocabulary.id,
         vocabulary.title,
@@ -378,13 +412,11 @@ const VocabularyList = ({
         vocabulary.cover_image_url
       );
     } else {
-      // This case should ideally not happen if button is only shown when story_id exists.
-      // However, as a fallback or if there's a UI delay:
       toast({
         title: "Story Not Available",
         description:
           "This vocabulary does not have a story yet. Please create one first.",
-        variant: "default", // Or "destructive" if it's considered an error state
+        variant: "default",
       });
       console.warn(
         "Play Story clicked for vocabulary without a story_id:",
@@ -392,6 +424,20 @@ const VocabularyList = ({
       );
     }
   };
+
+  const filteredVocabularies = useMemo(() => {
+    return vocabularies.filter((vocabulary) =>
+      vocabulary.title.toLowerCase().includes(searchQuery.toLowerCase())
+    );
+  }, [vocabularies, searchQuery]);
+
+  const favoriteVocabularies = useMemo(() => {
+    return filteredVocabularies.filter((vocabulary) => vocabulary.is_favorite);
+  }, [filteredVocabularies]);
+
+  const otherVocabularies = useMemo(() => {
+    return filteredVocabularies.filter((vocabulary) => !vocabulary.is_favorite);
+  }, [filteredVocabularies]);
 
   if (isLoading) {
     return (
@@ -401,161 +447,192 @@ const VocabularyList = ({
     );
   }
 
+  const renderVocabularyCard = (vocabulary: Vocabulary) => {
+    const backgroundImage = vocabulary.cover_image_url;
+    const progress = getVocabularyProgress(
+      vocabulary.id,
+      vocabulary.word_count || 0
+    );
+    const isCompleted = isVocabularyCompleted(vocabulary.id);
+
+    return (
+      <Card
+        key={vocabulary.id}
+        className={`transition-shadow ${
+          isCompleted ? "ring-2 ring-green-200 bg-green-50" : ""
+        }`}
+        style={{
+          backgroundImage: `url(${backgroundImage})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundColor: "rgba(255, 255, 255, 0.85)",
+          backgroundBlendMode: "overlay",
+        }}
+      >
+        <CardHeader>
+          <div className="flex justify-between items-start">
+            <CardTitle className="text-lg flex items-center space-x-2">
+              <span>{vocabulary.title}</span>
+              {isCompleted && (
+                <CheckCircle className="h-5 w-5 text-green-600" />
+              )}
+            </CardTitle>
+            <div className="flex items-center space-x-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                className="h-8 w-8 p-0"
+                onClick={() =>
+                  favoriteMutation.mutate({
+                    vocabularyId: vocabulary.id,
+                    is_favorite: !vocabulary.is_favorite,
+                  })
+                }
+              >
+                <Star
+                  className={`h-5 w-5 ${
+                    vocabulary.is_favorite
+                      ? "text-yellow-500 fill-yellow-400"
+                      : "text-gray-400"
+                  }`}
+                />
+              </Button>
+              <div className="flex space-x-2">
+                {vocabulary.is_default && (
+                  <Badge variant="secondary">Default</Badge>
+                )}
+                {isCompleted && (
+                  <Badge className="bg-green-100 text-green-800 border-green-300">
+                    Completed
+                  </Badge>
+                )}
+              </div>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-8 w-8 p-0">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="bg-white">
+                  <DropdownMenuItem
+                    onClick={() => handleEdit(vocabulary)}
+                    className="cursor-pointer"
+                  >
+                    <Edit className="h-4 w-4 mr-2" />
+                    Edit
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => handleResetProgress(vocabulary)}
+                    className="cursor-pointer"
+                  >
+                    <RotateCcw className="h-4 w-4 mr-2" />
+                    Reset progress
+                  </DropdownMenuItem>
+                  <DropdownMenuItem
+                    onClick={() => handleDelete(vocabulary)}
+                    className="text-red-600 focus:text-red-600 cursor-pointer"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
+          </div>
+          <CardDescription className="capitalize">
+            Topic: {vocabulary.topic.replace("-", " ")}
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            <div className="flex justify-between text-sm text-gray-600">
+              <span>From: {vocabulary.source_language.toUpperCase()}</span>
+              <span>To: {vocabulary.target_language.toUpperCase()}</span>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex justify-between text-sm">
+                <span className="text-gray-600">Progress</span>
+                <span className="text-gray-600">
+                  {progress.correctAnswers} / {progress.totalWords} words
+                </span>
+              </div>
+              <Progress
+                value={progress.progressPercentage}
+                className={`w-full ${isCompleted ? "bg-green-200" : ""}`}
+              />
+              <div className="text-xs text-center text-gray-500">
+                {Math.round(progress.progressPercentage)}% complete
+              </div>
+            </div>
+            <div className="flex space-x-2">
+              <Button
+                onClick={() => onSelectVocabulary(vocabulary)}
+                className="w-full flex items-center space-x-2"
+                variant={isCompleted ? "outline" : "default"}
+              >
+                <Play className="h-4 w-4" />
+                <span>{isCompleted ? "Review" : "Start Learning"}</span>
+              </Button>
+              {vocabulary.story_id && (
+                <Button
+                  onClick={() => handlePlayStoryClick(vocabulary)}
+                  className="w-full flex items-center space-x-2"
+                  variant="secondary"
+                  disabled={(vocabulary.word_count || 0) === 0}
+                >
+                  <BookOpen className="h-4 w-4" />
+                  <span>Play Story</span>
+                </Button>
+              )}
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  };
+
   return (
     <>
       <div className="space-y-6">
         <div className="flex justify-between items-center">
           <h2 className="text-2xl font-bold text-gray-900">Vocabulary Lists</h2>
-          <Button onClick={onCreateNew} className="flex items-center space-x-2">
-            <Plus className="h-4 w-4" />
-            <span>Create New</span>
-          </Button>
+          <div className="flex items-center space-x-2">
+            <Input
+              placeholder="Search vocabulary..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="w-64"
+            />
+            <Button
+              onClick={onCreateNew}
+              className="flex items-center space-x-2"
+            >
+              <Plus className="h-4 w-4" />
+              <span>Create New</span>
+            </Button>
+          </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {vocabularies.map((vocabulary) => {
-            const backgroundImage = vocabulary.cover_image_url;
-            const progress = getVocabularyProgress(
-              vocabulary.id,
-              vocabulary.word_count || 0
-            );
-            const isCompleted = isVocabularyCompleted(vocabulary.id);
-            // const currentlyGenerating = isGeneratingStory === vocabulary.id; // Removed
+        {favoriteVocabularies.length > 0 && (
+          <div>
+            <h3 className="text-xl font-bold text-gray-800 mb-4">Favorites</h3>
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+              {favoriteVocabularies.map(renderVocabularyCard)}
+            </div>
+          </div>
+        )}
 
-            return (
-              <Card
-                key={vocabulary.id}
-                className={`transition-shadow ${
-                  isCompleted ? "ring-2 ring-green-200 bg-green-50" : ""
-                }`}
-                style={{
-                  backgroundImage: `url(${backgroundImage})`,
-                  backgroundSize: "cover",
-                  backgroundPosition: "center",
-                  backgroundColor: "rgba(255, 255, 255, 0.85)", // Add pale overlay
-                  backgroundBlendMode: "overlay", // Ensure the pale effect applies only to the background
-                }}
-              >
-                <CardHeader>
-                  <div className="flex justify-between items-start">
-                    <CardTitle className="text-lg flex items-center space-x-2">
-                      <span>{vocabulary.title}</span>
-                      {isCompleted && (
-                        <CheckCircle className="h-5 w-5 text-green-600" />
-                      )}
-                    </CardTitle>
-                    <div className="flex items-center space-x-2">
-                      <div className="flex space-x-2">
-                        {vocabulary.is_default && (
-                          <Badge variant="secondary">Default</Badge>
-                        )}
-                        {isCompleted && (
-                          <Badge className="bg-green-100 text-green-800 border-green-300">
-                            Completed
-                          </Badge>
-                        )}
-                      </div>
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="h-8 w-8 p-0"
-                          >
-                            <MoreVertical className="h-4 w-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end" className="bg-white">
-                          <DropdownMenuItem
-                            onClick={() => handleEdit(vocabulary)}
-                            className="cursor-pointer"
-                          >
-                            <Edit className="h-4 w-4 mr-2" />
-                            Edit
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleResetProgress(vocabulary)}
-                            className="cursor-pointer"
-                          >
-                            <RotateCcw className="h-4 w-4 mr-2" />
-                            Reset progress
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleDelete(vocabulary)}
-                            className="text-red-600 focus:text-red-600 cursor-pointer"
-                          >
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  </div>
-                  <CardDescription className="capitalize">
-                    Topic: {vocabulary.topic.replace("-", " ")}
-                  </CardDescription>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-4">
-                    <div className="flex justify-between text-sm text-gray-600">
-                      <span>
-                        From: {vocabulary.source_language.toUpperCase()}
-                      </span>
-                      <span>
-                        To: {vocabulary.target_language.toUpperCase()}
-                      </span>
-                    </div>
-
-                    <div className="space-y-2">
-                      <div className="flex justify-between text-sm">
-                        <span className="text-gray-600">Progress</span>
-                        <span className="text-gray-600">
-                          {progress.correctAnswers} / {progress.totalWords}{" "}
-                          words
-                        </span>
-                      </div>
-                      <Progress
-                        value={progress.progressPercentage}
-                        className={`w-full ${
-                          isCompleted ? "bg-green-200" : ""
-                        }`}
-                      />
-                      <div className="text-xs text-center text-gray-500">
-                        {Math.round(progress.progressPercentage)}% complete
-                      </div>
-                    </div>
-                    <div className="flex space-x-2">
-                      <Button
-                        onClick={() => onSelectVocabulary(vocabulary)}
-                        className="w-full flex items-center space-x-2"
-                        variant={isCompleted ? "outline" : "default"}
-                      >
-                        <Play className="h-4 w-4" />
-                        <span>{isCompleted ? "Review" : "Start Learning"}</span>
-                      </Button>
-                      {vocabulary.story_id && ( // Conditionally render Play Story button
-                        <Button
-                          onClick={() => handlePlayStoryClick(vocabulary)}
-                          className="w-full flex items-center space-x-2"
-                          variant="secondary"
-                          // Word count check might still be relevant if story exists but vocab somehow became empty
-                          // though this scenario is less likely with current story generation logic.
-                          disabled={(vocabulary.word_count || 0) === 0}
-                        >
-                          <BookOpen className="h-4 w-4" />
-                          <span>Play Story</span>
-                        </Button>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
+        <div>
+          <h3 className="text-xl font-bold text-gray-800 mb-4">
+            {favoriteVocabularies.length > 0 ? "Other" : "All"} Vocabularies
+          </h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            {otherVocabularies.map(renderVocabularyCard)}
+          </div>
         </div>
       </div>
 
-      {/* Delete Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
         <AlertDialogContent>
           <AlertDialogHeader>
