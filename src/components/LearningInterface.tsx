@@ -253,6 +253,14 @@ const LearningInterface = ({
     challengeTypeRef.current = challengeType;
   }, [challengeType]);
 
+  useEffect(() => {
+    if (audioUrl && audioRef.current) {
+      audioRef.current.src = audioUrl;
+      audioRef.current.load();
+      audioRef.current.play().catch((e) => console.error("Error playing audio:", e));
+    }
+  }, [audioUrl]);
+
   const generateChoices = () => {
     if (!currentWord || words.length < 4) return;
 
@@ -391,14 +399,12 @@ const LearningInterface = ({
     if (!currentWord || isAudioLoading) return;
 
     setIsAudioLoading(true);
-    setAudioUrl(null); // Clear previous audio
-    let urlToPlay = currentWord.audio_url;
     try {
+      let urlToPlay = currentWord.audio_url;
       if (!urlToPlay) {
-        // Get languageYouKnow from vocabulary details
         const { data: vocabularyData, error: vocabError } = await supabase
           .from("vocabularies")
-          .select("source_language") // Still 'source_language' in DB
+          .select("source_language")
           .eq("id", vocabularyId)
           .single();
 
@@ -423,24 +429,17 @@ const LearningInterface = ({
 
         urlToPlay = data.audioUrl;
 
-        // Update the vocabulary_words table with the new audio_url
-        const updateResponse = await supabase
+        const { error: updateError } = await supabase
           .from("vocabulary_words")
           .update({ audio_url: urlToPlay })
           .eq("id", currentWord.id);
 
-        if (updateResponse.error) {
-          console.error(
-            "Error updating word with audio_url:",
-            updateResponse.error
-          );
-          // Potentially notify user, but proceed with playing audio if generated
+        if (updateError) {
+          console.error("Error updating word with audio_url:", updateError);
         } else {
-          // Refetch words to get the updated audio_url in the local cache
           refetchWords();
         }
       }
-
       setAudioUrl(urlToPlay);
     } catch (err: any) {
       console.error("Error generating or fetching audio:", err);
@@ -451,9 +450,6 @@ const LearningInterface = ({
       });
     } finally {
       setIsAudioLoading(false);
-      audioRef.current.src = audioUrl;
-      await audioRef.current.load(); // Preload the audio file
-      playWordAudio(urlToPlay, audioRef);
     }
   };
 
@@ -615,6 +611,7 @@ const LearningInterface = ({
                 onClick={handleListen}
                 disabled={isAudioLoading || !currentWord}
                 aria-label="Listen to word"
+                type="button"
               >
                 <Volume2
                   className={`h-6 w-6 ${isAudioLoading ? "animate-spin" : ""}`}
@@ -766,24 +763,3 @@ const LearningInterface = ({
 };
 
 export default LearningInterface;
-async function playWordAudio(
-  audioUrl: string,
-  audioRef: React.MutableRefObject<HTMLAudioElement>
-) {
-  if (audioUrl && audioRef.current) {
-    // Ensure the audio is loaded before attempting to play
-    audioRef.current.src = audioUrl;
-    await audioRef.current.load(); // Preload the audio file
-    audioRef.current.play().catch((e) => {
-      console.error("Error playing audio:", e);
-      // Retry playing after 1 second
-      setTimeout(() => {
-        audioRef.current
-          ?.play()
-          .catch((retryError) =>
-            console.error("Retry failed to play audio:", retryError)
-          );
-      }, 1000);
-    });
-  }
-}
