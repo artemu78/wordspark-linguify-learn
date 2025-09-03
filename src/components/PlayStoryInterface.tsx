@@ -44,6 +44,7 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
   const [currentBitIndex, setCurrentBitIndex] = useState(0);
   const [audioUrl, setAudioUrl] = useState<string | null>(null);
   const [isAudioLoading, setIsAudioLoading] = useState(false);
+  const [isImageLoading, setIsImageLoading] = useState(true);
   const audioRef = useRef<HTMLAudioElement>(null);
   const { toast } = useToast();
 
@@ -138,6 +139,10 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
       )
     );
   };
+
+  useEffect(() => {
+    setIsImageLoading(true);
+  }, [currentBitIndex]);
 
   const handleNext = () => {
     if (storyBits && currentBitIndex < storyBits.length - 1) {
@@ -309,18 +314,27 @@ const PlayStoryInterface: React.FC<PlayStoryInterfaceProps> = ({
           {currentBit && (
             <div className="space-y-6">
               <div className="flex justify-center items-center h-64 bg-gray-100 rounded-lg overflow-hidden">
+                {isImageLoading && (
+                  <div className="flex flex-col items-center justify-center text-gray-500">
+                    <Loader2 className="h-8 w-8 animate-spin mb-2" />
+                    <p className="text-sm">Loading image...</p>
+                  </div>
+                )}
                 {currentBit.image_url ? (
                   <img
                     src={currentBit.image_url}
                     alt={`Story bit for ${currentBit.word}`}
-                    className="max-h-full max-w-full object-contain"
+                    className={`max-h-full max-w-full object-contain ${
+                      isImageLoading ? "hidden" : ""
+                    }`}
+                    onLoad={() => setIsImageLoading(false)}
                   />
-                ) : currentBit.image_generation_status === 'generating' ? (
+                ) : currentBit.image_generation_status === "generating" ? (
                   <div className="flex flex-col items-center justify-center text-gray-500">
                     <Loader2 className="h-8 w-8 animate-spin mb-2" />
                     <p className="text-sm">Generating image...</p>
                   </div>
-                ) : currentBit.image_generation_status === 'failed' ? (
+                ) : currentBit.image_generation_status === "failed" ? (
                   <div className="flex flex-col items-center justify-center text-gray-500">
                     <ImageIcon className="h-8 w-8 mb-2" />
                     <p className="text-sm">Image generation failed</p>
