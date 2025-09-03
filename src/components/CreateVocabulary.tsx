@@ -4,6 +4,16 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Select,
   SelectContent,
   SelectItem,
@@ -64,6 +74,7 @@ const CreateVocabulary = ({
   const [wordPairs, setWordPairs] = useState<WordPair[]>([
     { word: "", translation: "" },
   ]);
+  const [showConfirmation, setShowConfirmation] = useState(false);
 
   // Language store integration
   const {
@@ -322,7 +333,16 @@ const CreateVocabulary = ({
       });
       return;
     }
-    generateVocabularyMutation.mutate();
+
+    const hasWords = wordPairs.some(
+      (pair) => pair.word.trim() !== "" || pair.translation.trim() !== ""
+    );
+
+    if (hasWords) {
+      setShowConfirmation(true);
+    } else {
+      generateVocabularyMutation.mutate();
+    }
   };
 
   const addWordPair = () => {
@@ -757,6 +777,23 @@ const CreateVocabulary = ({
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={showConfirmation} onOpenChange={setShowConfirmation}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Are you sure?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Generating new words with AI will overwrite your current word list. Are you sure you want to proceed?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction onClick={() => generateVocabularyMutation.mutate()}>
+              Confirm
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };
