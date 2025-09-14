@@ -294,39 +294,55 @@ const CreateVocabulary = ({
     reader.onload = (e) => {
       const text = e.target?.result as string;
       const lines = text.split(/\r?\n/).filter((line) => line.trim() !== "");
+
       if (lines.length === 0) {
         toast({
           title: "Import Info",
-          description:
-            "The selected file is empty or contains no valid words.",
-          variant: "default",
+          description: "The selected file is empty or contains no valid words.",
         });
         return;
       }
-      const newWordPairs = lines.map((line) => ({
-        word: line.trim(),
-        translation: "",
-      }));
+
+      let addedCount = 0;
+      let skippedCount = 0;
 
       setWordPairs((currentWordPairs) => {
-        // If the only pair is the initial empty one, replace it.
+        const existingWords = new Set(
+          currentWordPairs.map((pair) => pair.word.trim().toLowerCase())
+        );
+
+        const newWords = lines
+          .map((line) => line.trim())
+          .filter((word) => word.length > 0);
+
+        const uniqueNewWordPairs: WordPair[] = [];
+
+        for (const word of newWords) {
+          if (!existingWords.has(word.toLowerCase())) {
+            uniqueNewWordPairs.push({ word, translation: "" });
+            existingWords.add(word.toLowerCase()); // Add to set to handle duplicates within the file itself
+            addedCount++;
+          } else {
+            skippedCount++;
+          }
+        }
+
         if (
           currentWordPairs.length === 1 &&
           currentWordPairs[0].word === "" &&
           currentWordPairs[0].translation === ""
         ) {
-          return newWordPairs;
+          return uniqueNewWordPairs;
         }
-        // Otherwise, append to the existing list.
-        return [...currentWordPairs, ...newWordPairs];
+
+        return [...currentWordPairs, ...uniqueNewWordPairs];
       });
 
       toast({
-        title: "Import Successful",
-        description: `Added ${newWordPairs.length} words from ${file.name}.`,
+        title: "Import Complete",
+        description: `Added ${addedCount} new words. Skipped ${skippedCount} duplicate(s).`,
       });
 
-      // Reset file input value to allow re-uploading the same file
       if (fileInputRef.current) {
         fileInputRef.current.value = "";
       }
@@ -737,6 +753,7 @@ const CreateVocabulary = ({
                   onChange={handleFileChange}
                   className="hidden"
                   accept=".txt"
+                  data-testid="file-import-input"
                 />
 
                 <div className="space-y-3 max-h-60 overflow-y-auto pr-2">

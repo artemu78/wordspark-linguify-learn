@@ -1024,4 +1024,57 @@ describe("CreateVocabulary Component", () => {
     await user.click(doneButton);
     expect(mockOnBack).toHaveBeenCalledTimes(2); // Called once for "Back", once for "Done"
   });
+
+  describe("File Import", () => {
+    test("imports words from a file, skipping duplicates", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(
+        <CreateVocabulary
+          onBack={mockOnBack}
+          onPlayStory={mockOnPlayStory}
+          onStartLearning={mockOnStartLearning}
+        />
+      );
+
+      // Setup initial words in the list
+      await user.type(screen.getByPlaceholderText("Word"), "banana");
+      await user.type(screen.getByPlaceholderText("Translation"), "banana-t");
+      await user.click(screen.getByRole("button", { name: /Add Word/i }));
+      await user.type(screen.getAllByPlaceholderText("Word")[1], "Date");
+      await user.type(
+        screen.getAllByPlaceholderText("Translation")[1],
+        "date-t"
+      );
+
+      // Prepare the file to be imported
+      const fileContent = "apple\nbanana\ncherry\napple\nDate";
+      const file = new File([fileContent], "words.txt", { type: "text/plain" });
+
+      // Find the hidden file input. We can't use getByLabelText directly if it's hidden.
+      // We'll find it by its test id or another unique attribute if available, or just by tag if it's the only one.
+      // The component doesn't have a test-id for the input, so we'll be creative.
+      // We know the "Import" button clicks it, so we can mock the click handler or find the input.
+      const fileInput = screen.getByTestId("file-import-input");
+
+      // Upload the file
+      await user.upload(fileInput, file);
+
+      // Assertions
+      await waitFor(() => {
+        // Check the final list of words. Should be banana, Date, apple, cherry.
+        const wordInputs = screen.getAllByPlaceholderText("Word");
+        expect(wordInputs).toHaveLength(4);
+        expect(wordInputs[0]).toHaveValue("banana");
+        expect(wordInputs[1]).toHaveValue("Date");
+        expect(wordInputs[2]).toHaveValue("apple");
+        expect(wordInputs[3]).toHaveValue("cherry");
+      });
+
+      // Check the toast message
+      expect(mockToast).toHaveBeenCalledWith({
+        title: "Import Complete",
+        description: `Added 2 new words. Skipped 3 duplicate(s).`,
+      });
+    });
+  });
 });
