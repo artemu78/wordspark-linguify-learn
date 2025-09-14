@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +28,7 @@ import {
   BookPlus,
   Loader2,
   Languages,
+  FileUp,
 } from "lucide-react"; // Added BookPlus, Loader2, Languages
 import { Switch } from "@/components/ui/switch"; // Added Switch
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -63,6 +64,7 @@ const CreateVocabulary = ({
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [vocabularyImageUrl, setVocabularyImageUrl] = useState<string | null>(
     null
   );
@@ -281,6 +283,83 @@ const CreateVocabulary = ({
       });
     },
   });
+
+  const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) {
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = (e) => {
+      const text = e.target?.result as string;
+      const lines = text.split(/\r?\n/).filter((line) => line.trim() !== "");
+
+      if (lines.length === 0) {
+        toast({
+          title: "Import Info",
+          description: "The selected file is empty or contains no valid words.",
+        });
+        return;
+      }
+
+      let addedCount = 0;
+      let skippedCount = 0;
+
+      setWordPairs((currentWordPairs) => {
+        const existingWords = new Set(
+          currentWordPairs.map((pair) => pair.word.trim().toLowerCase())
+        );
+
+        const newWords = lines
+          .map((line) => line.trim())
+          .filter((word) => word.length > 0);
+
+        const uniqueNewWordPairs: WordPair[] = [];
+
+        for (const word of newWords) {
+          if (!existingWords.has(word.toLowerCase())) {
+            uniqueNewWordPairs.push({ word, translation: "" });
+            existingWords.add(word.toLowerCase()); // Add to set to handle duplicates within the file itself
+            addedCount++;
+          } else {
+            skippedCount++;
+          }
+        }
+
+        if (
+          currentWordPairs.length === 1 &&
+          currentWordPairs[0].word === "" &&
+          currentWordPairs[0].translation === ""
+        ) {
+          return uniqueNewWordPairs;
+        }
+
+        return [...currentWordPairs, ...uniqueNewWordPairs];
+      });
+
+      toast({
+        title: "Import Complete",
+        description: `Added ${addedCount} new words. Skipped ${skippedCount} duplicate(s).`,
+      });
+
+      if (fileInputRef.current) {
+        fileInputRef.current.value = "";
+      }
+    };
+    reader.onerror = () => {
+      toast({
+        title: "Import Failed",
+        description: "There was an error reading the file.",
+        variant: "destructive",
+      });
+    };
+    reader.readAsText(file);
+  };
+
+  const handleImportClick = () => {
+    fileInputRef.current?.click();
+  };
 
   const handleTranslateWord = (index: number) => {
     const word = wordPairs[index].word.trim();
@@ -650,6 +729,16 @@ const CreateVocabulary = ({
                       type="button"
                       variant="outline"
                       size="sm"
+                      onClick={handleImportClick}
+                      disabled={createVocabularyMutation.isPending}
+                    >
+                      <FileUp className="h-4 w-4 mr-2" />
+                      Import
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
                       onClick={addWordPair}
                       disabled={createVocabularyMutation.isPending}
                     >
@@ -658,6 +747,14 @@ const CreateVocabulary = ({
                     </Button>
                   </div>
                 </div>
+                <input
+                  type="file"
+                  ref={fileInputRef}
+                  onChange={handleFileChange}
+                  className="hidden"
+                  accept=".txt"
+                  data-testid="file-import-input"
+                />
 
                 <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
                   {wordPairs.map((pair, index) => (
