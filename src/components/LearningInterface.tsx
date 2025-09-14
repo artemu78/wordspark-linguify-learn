@@ -3,7 +3,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { ArrowLeft, Check, X, RotateCcw, Volume2, RefreshCw, Home } from "lucide-react";
+import {
+  ArrowLeft,
+  Check,
+  X,
+  RotateCcw,
+  Volume2,
+  RefreshCw,
+  Home,
+} from "lucide-react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { supabase } from "@/integrations/supabase/client";
 import { useAuth } from "@/contexts/AuthContext";
@@ -256,8 +264,10 @@ const LearningInterface = ({
   useEffect(() => {
     if (audioUrl && audioRef.current) {
       audioRef.current.src = audioUrl;
-      audioRef.current.load();
-      audioRef.current.play().catch((e) => console.error("Error playing audio:", e));
+      if (typeof audioRef.current.load === "function") {
+        audioRef.current.load();
+      }
+      // Do not call play() here; playback is now user-initiated only
     }
   }, [audioUrl]);
 
@@ -441,6 +451,21 @@ const LearningInterface = ({
         }
       }
       setAudioUrl(urlToPlay);
+
+      // User-initiated playback: always pause, reset, and play
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.play().catch((e) => {
+          // Handle play() errors (e.g., user gesture required)
+          console.error("Error playing audio:", e);
+          toast({
+            title: "Audio Playback Error",
+            description: e.message || "Could not play audio.",
+            variant: "destructive",
+          });
+        });
+      }
     } catch (err: any) {
       console.error("Error generating or fetching audio:", err);
       toast({
@@ -455,7 +480,7 @@ const LearningInterface = ({
 
   const handleRepeat = async () => {
     if (!user) return;
-    
+
     // Clear all progress for this vocabulary
     const { error } = await supabase
       .from("user_progress")
@@ -486,7 +511,7 @@ const LearningInterface = ({
     setShowResult(false);
     setSelectedChoice(null);
     setTypedAnswer("");
-    
+
     // Invalidate queries to refetch fresh data
     queryClient.invalidateQueries({
       queryKey: ["user-progress", vocabularyId, user?.id],
@@ -556,11 +581,7 @@ const LearningInterface = ({
                 <RefreshCw className="h-5 w-5 mr-2" />
                 Repeat
               </Button>
-              <Button
-                onClick={handleLearnMore}
-                size="lg"
-                className="px-8"
-              >
+              <Button onClick={handleLearnMore} size="lg" className="px-8">
                 <Home className="h-5 w-5 mr-2" />
                 Learn More
               </Button>
