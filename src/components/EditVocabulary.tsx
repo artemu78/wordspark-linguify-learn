@@ -33,6 +33,7 @@ import { useLanguageStore } from "@/stores/languageStore"; // Import the languag
 import { useAuth } from "@/contexts/AuthContext";
 import { useToast } from "@/hooks/use-toast";
 import { generateAndSaveStory, StoryGenerationError } from "@/lib/storyUtils"; // Added
+import { Checkbox } from "@/components/ui/checkbox";
 
 interface EditVocabularyProps {
   vocabularyId: string;
@@ -63,6 +64,9 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
   const [isCreatingStory, setIsCreatingStory] = useState(false);
   const [isReGeneratingStory, setIsReGeneratingStory] = useState(false); // New state for re-generation
   const [translatingWords, setTranslatingWords] = useState<Set<number>>(
+    new Set()
+  );
+  const [selectedWordIndexes, setSelectedWordIndexes] = useState<Set<number>>(
     new Set()
   );
 
@@ -364,6 +368,40 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
   const removeWordPair = (index: number) => {
     if (wordPairs.length > 1) {
       setWordPairs(wordPairs.filter((_, i) => i !== index));
+      setSelectedWordIndexes((prev) => {
+        const newSet = new Set(prev);
+        newSet.delete(index);
+        return newSet;
+      });
+    }
+  };
+
+  const handleDeleteSelected = () => {
+    if (selectedWordIndexes.size === 0) {
+      return;
+    }
+    const newWordPairs = wordPairs.filter(
+      (_, index) => !selectedWordIndexes.has(index)
+    );
+    setWordPairs(newWordPairs.length > 0 ? newWordPairs : [{ id: undefined, word: "", translation: "" }]);
+    setSelectedWordIndexes(new Set());
+  };
+
+  const handleTranslateSelected = () => {
+    if (selectedWordIndexes.size === 0) {
+      return;
+    }
+    selectedWordIndexes.forEach((index) => {
+      handleTranslateWord(index);
+    });
+  };
+
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      const allIndexes = new Set(wordPairs.map((_, index) => index));
+      setSelectedWordIndexes(allIndexes);
+    } else {
+      setSelectedWordIndexes(new Set());
     }
   };
 
@@ -765,9 +803,63 @@ const EditVocabulary = ({ vocabularyId, onBack }: EditVocabularyProps) => {
                 </div>
               </div>
 
+              <div className="flex items-center justify-between mt-4">
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="select-all"
+                    checked={
+                      selectedWordIndexes.size > 0 &&
+                      selectedWordIndexes.size === wordPairs.length
+                        ? true
+                        : selectedWordIndexes.size > 0
+                        ? "indeterminate"
+                        : false
+                    }
+                    onCheckedChange={(checked) =>
+                      handleSelectAll(checked as boolean)
+                    }
+                  />
+                  <Label htmlFor="select-all">Select All</Label>
+                </div>
+                <div className="flex space-x-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleDeleteSelected}
+                    disabled={selectedWordIndexes.size === 0}
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete Selected
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={handleTranslateSelected}
+                    disabled={selectedWordIndexes.size === 0}
+                  >
+                    <Languages className="h-4 w-4 mr-2" />
+                    Translate Selected
+                  </Button>
+                </div>
+              </div>
+
               <div className="space-y-3 max-h-60 overflow-y-auto pr-2">
                 {wordPairs.map((pair, index) => (
                   <div key={index} className="flex space-x-2 items-center">
+                    <Checkbox
+                      checked={selectedWordIndexes.has(index)}
+                      onCheckedChange={(checked) => {
+                        const newSet = new Set(selectedWordIndexes);
+                        if (checked) {
+                          newSet.add(index);
+                        } else {
+                          newSet.delete(index);
+                        }
+                        setSelectedWordIndexes(newSet);
+                      }}
+                    />
                     <Input
                       placeholder="Word"
                       value={pair.word}
