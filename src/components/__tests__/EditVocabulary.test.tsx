@@ -965,4 +965,87 @@ describe("EditVocabulary Component", () => {
     await user.click(backButton);
     expect(mockOnBack).toHaveBeenCalledTimes(1);
   });
+
+  describe("Word Selection and Actions in Edit Mode", () => {
+    beforeEach(async () => {
+        render(
+            <AllTheProviders>
+              <EditVocabulary vocabularyId={testVocabularyId} onBack={mockOnBack} />
+            </AllTheProviders>
+          );
+      await waitFor(() => {
+        expect(screen.getAllByPlaceholderText("Word")).toHaveLength(mockWordsData.length);
+      });
+    });
+
+    test("selects and deselects a single word", async () => {
+      const user = userEvent.setup();
+      const checkboxes = screen.getAllByRole("checkbox");
+      const firstWordCheckbox = checkboxes[1];
+
+      await user.click(firstWordCheckbox);
+      expect(firstWordCheckbox).toBeChecked();
+
+      await user.click(firstWordCheckbox);
+      expect(firstWordCheckbox).not.toBeChecked();
+    });
+
+    test("selects and deselects all words", async () => {
+      const user = userEvent.setup();
+      const selectAllCheckbox = screen.getByLabelText("Select All");
+      const wordCheckboxes = screen.getAllByRole("checkbox").slice(1);
+
+      await user.click(selectAllCheckbox);
+      wordCheckboxes.forEach(checkbox => expect(checkbox).toBeChecked());
+
+      await user.click(selectAllCheckbox);
+      wordCheckboxes.forEach(checkbox => expect(checkbox).not.toBeChecked());
+    });
+
+    test("'Select All' checkbox shows indeterminate state", async () => {
+      const user = userEvent.setup();
+      const selectAllCheckbox = screen.getByLabelText("Select All");
+      const firstWordCheckbox = screen.getAllByRole("checkbox")[1];
+
+      await user.click(firstWordCheckbox);
+      expect(selectAllCheckbox).toHaveAttribute("data-state", "indeterminate");
+    });
+
+    test("deletes selected words", async () => {
+      const user = userEvent.setup();
+      const firstWordCheckbox = screen.getAllByRole("checkbox")[1];
+      await user.click(firstWordCheckbox);
+
+      const deleteSelectedButton = screen.getByRole("button", { name: /Delete Selected/i });
+      await user.click(deleteSelectedButton);
+
+      const remainingWordInputs = screen.getAllByPlaceholderText("Word");
+      expect(remainingWordInputs).toHaveLength(1);
+      expect(remainingWordInputs[0]).toHaveValue("world");
+    });
+
+    test("translates selected words", async () => {
+      const user = userEvent.setup();
+      const firstWordCheckbox = screen.getAllByRole("checkbox")[1];
+      await user.click(firstWordCheckbox);
+
+      const translateSelectedButton = screen.getByRole("button", { name: /Translate Selected/i });
+      await user.click(translateSelectedButton);
+
+      await waitFor(() => {
+        expect(mockSupabaseClient.functions.invoke).toHaveBeenCalledWith(
+            "translate-word",
+            expect.objectContaining({
+                body: expect.objectContaining({ word: "hello" })
+            })
+        );
+        expect(mockSupabaseClient.functions.invoke).not.toHaveBeenCalledWith(
+            "translate-word",
+            expect.objectContaining({
+                body: expect.objectContaining({ word: "world" })
+            })
+        );
+      });
+    });
+  });
 });

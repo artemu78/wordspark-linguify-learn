@@ -1077,4 +1077,132 @@ describe("CreateVocabulary Component", () => {
       });
     });
   });
+
+  describe("Word Selection and Actions", () => {
+    test("selects and deselects a single word", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(
+        <CreateVocabulary
+          onBack={mockOnBack}
+          onPlayStory={mockOnPlayStory}
+          onStartLearning={mockOnStartLearning}
+        />
+      );
+      await user.click(screen.getByRole("button", { name: /Add Word/i }));
+
+      const checkboxes = screen.getAllByRole("checkbox");
+      const firstWordCheckbox = checkboxes[1];
+
+      await user.click(firstWordCheckbox);
+      expect(firstWordCheckbox).toBeChecked();
+
+      await user.click(firstWordCheckbox);
+      expect(firstWordCheckbox).not.toBeChecked();
+    });
+
+    test("selects and deselects all words", async () => {
+      const user = userEvent.setup();
+      renderWithProviders(
+        <CreateVocabulary
+          onBack={mockOnBack}
+          onPlayStory={mockOnPlayStory}
+          onStartLearning={mockOnStartLearning}
+        />
+      );
+      await user.click(screen.getByRole("button", { name: /Add Word/i }));
+
+      const selectAllCheckbox = screen.getByLabelText("Select All");
+      const wordCheckboxes = screen.getAllByRole("checkbox").slice(1);
+
+      await user.click(selectAllCheckbox);
+      wordCheckboxes.forEach(checkbox => expect(checkbox).toBeChecked());
+
+      await user.click(selectAllCheckbox);
+      wordCheckboxes.forEach(checkbox => expect(checkbox).not.toBeChecked());
+    });
+
+    test("'Select All' checkbox shows indeterminate state", async () => {
+        const user = userEvent.setup();
+        renderWithProviders(
+          <CreateVocabulary
+            onBack={mockOnBack}
+            onPlayStory={mockOnPlayStory}
+            onStartLearning={mockOnStartLearning}
+          />
+        );
+        await user.click(screen.getByRole("button", { name: /Add Word/i }));
+
+        const selectAllCheckbox = screen.getByLabelText("Select All");
+        const firstWordCheckbox = screen.getAllByRole("checkbox")[1];
+
+        await user.click(firstWordCheckbox);
+        expect(selectAllCheckbox).toHaveAttribute("data-state", "indeterminate");
+    });
+
+    test("deletes selected words", async () => {
+        const user = userEvent.setup();
+        renderWithProviders(
+          <CreateVocabulary
+            onBack={mockOnBack}
+            onPlayStory={mockOnPlayStory}
+            onStartLearning={mockOnStartLearning}
+          />
+        );
+        await user.click(screen.getByRole("button", { name: /Add Word/i })); // Now 2 words
+        await user.click(screen.getByRole("button", { name: /Add Word/i })); // Now 3 words
+
+        await user.type(screen.getAllByPlaceholderText("Word")[0], "Word 1");
+        await user.type(screen.getAllByPlaceholderText("Word")[1], "Word 2");
+        await user.type(screen.getAllByPlaceholderText("Word")[2], "Word 3");
+
+        const firstWordCheckbox = screen.getAllByRole("checkbox")[1];
+        const thirdWordCheckbox = screen.getAllByRole("checkbox")[3];
+
+        await user.click(firstWordCheckbox);
+        await user.click(thirdWordCheckbox);
+
+        const deleteSelectedButton = screen.getByRole("button", { name: /Delete Selected/i });
+        await user.click(deleteSelectedButton);
+
+        const remainingWordInputs = screen.getAllByPlaceholderText("Word");
+        expect(remainingWordInputs).toHaveLength(1);
+        expect(remainingWordInputs[0]).toHaveValue("Word 2");
+    });
+
+    test("translates selected words", async () => {
+        const user = userEvent.setup();
+        renderWithProviders(
+          <CreateVocabulary
+            onBack={mockOnBack}
+            onPlayStory={mockOnPlayStory}
+            onStartLearning={mockOnStartLearning}
+          />
+        );
+        await user.click(screen.getByRole("button", { name: /Add Word/i })); // 2 words
+
+        await user.type(screen.getAllByPlaceholderText("Word")[0], "Word 1");
+        await user.type(screen.getAllByPlaceholderText("Word")[1], "Word 2");
+
+        const firstWordCheckbox = screen.getAllByRole("checkbox")[1];
+        await user.click(firstWordCheckbox);
+
+        const translateSelectedButton = screen.getByRole("button", { name: /Translate Selected/i });
+        await user.click(translateSelectedButton);
+
+        await waitFor(() => {
+            expect(mockSupabaseClient.functions.invoke).toHaveBeenCalledWith(
+                "translate-word",
+                expect.objectContaining({
+                    body: expect.objectContaining({ word: "Word 1" })
+                })
+            );
+            expect(mockSupabaseClient.functions.invoke).not.toHaveBeenCalledWith(
+                "translate-word",
+                expect.objectContaining({
+                    body: expect.objectContaining({ word: "Word 2" })
+                })
+            );
+        });
+    });
+  });
 });
