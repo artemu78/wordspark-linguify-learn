@@ -848,13 +848,15 @@ const CreateVocabulary = ({
                       <Checkbox
                         checked={selectedWordIndexes.has(index)}
                         onCheckedChange={(checked) => {
-                          const newSet = new Set(selectedWordIndexes);
-                          if (checked) {
-                            newSet.add(index);
-                          } else {
-                            newSet.delete(index);
-                          }
-                          setSelectedWordIndexes(newSet);
+                          setSelectedWordIndexes((prev) => {
+                            const newSet = new Set(prev);
+                            if (checked) {
+                              newSet.add(index);
+                            } else {
+                              newSet.delete(index);
+                            }
+                            return newSet;
+                          });
                         }}
                       />
                       <Input
