@@ -436,8 +436,14 @@ const CreateVocabulary = ({
     if (wordPairs.length > 1) {
       setWordPairs(wordPairs.filter((_, i) => i !== index));
       setSelectedWordIndexes((prev) => {
-        const newSet = new Set(prev);
-        newSet.delete(index);
+        const newSet = new Set<number>();
+        prev.forEach((selectedIndex) => {
+          if (selectedIndex < index) {
+            newSet.add(selectedIndex);
+          } else if (selectedIndex > index) {
+            newSet.add(selectedIndex - 1);
+          }
+        });
         return newSet;
       });
     }
